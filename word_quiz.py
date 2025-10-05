@@ -59,7 +59,7 @@ def ding():
         sound.play()  # Play the sound
     else:
         print("Buzzer sound file not found!")
-    time.sleep(1.75)
+    time.sleep(2)
 
 # Function to quiz the user
 def quiz_game():
