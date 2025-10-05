@@ -65,9 +65,11 @@ def ding():
 def quiz_game():
     score = 0
     
-    # Loop through 10 random words
-    for _ in range(10):
-        word = random.choice(word_list)
+    # Select 10 unique random words from the word list
+    selected_words = random.sample(word_list, 10)
+    
+    # Loop through the selected words
+    for word in selected_words:
         engine.say(word)
         engine.runAndWait()  # Say the word out loud
         
