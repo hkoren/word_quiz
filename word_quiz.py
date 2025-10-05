@@ -59,11 +59,12 @@ def ding():
         sound.play()  # Play the sound
     else:
         print("Buzzer sound file not found!")
-    time.sleep(2.5)
+    time.sleep(1.75)
 
 # Function to quiz the user
 def quiz_game():
     score = 0
+    incorrect_words = []  # List to store incorrectly spelled words
     
     # Select 10 unique random words from the word list
     selected_words = random.sample(word_list, 10)
@@ -89,11 +90,18 @@ def quiz_game():
             ding()  # Play ding sound
             print("Correct!\n")
         else:
+            incorrect_words.append(word)  # Add to incorrect words list
             buzzer()  # Play buzzer sound
             print(f"Incorrect. The correct spelling is: {word}\n")
     
     # Display the final score
     print(f"Your score: {score} out of 10")
+    
+    # Display incorrectly spelled words if any
+    if incorrect_words:
+        print("\nPlease work on spelling these words:")
+        for word in incorrect_words:
+            print(f"  - {word}")
 
 # Start the quiz
 if __name__ == "__main__":
