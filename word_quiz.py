@@ -47,7 +47,19 @@ def buzzer():
         sound.play()  # Play the sound
     else:
         print("Buzzer sound file not found!")
-    time.sleep(2)
+    time.sleep(1)
+
+# Function to play a buzzer sound (using pygame)
+def ding():
+    buzzer_sound = 'ding.wav'  # Path to your buzzer sound file
+    
+    # Check if the buzzer sound file exists
+    if os.path.exists(buzzer_sound):
+        sound = pygame.mixer.Sound(buzzer_sound)  # Load the sound
+        sound.play()  # Play the sound
+    else:
+        print("Buzzer sound file not found!")
+    time.sleep(2.5)
 
 # Function to quiz the user
 def quiz_game():
@@ -60,10 +72,19 @@ def quiz_game():
         engine.runAndWait()  # Say the word out loud
         
         # Get the user's spelling attempt without showing the word
-        user_input = input("Spell the word you just heard:\n").strip().lower()
+        while True:
+            user_input = input("Spell the word you just heard (or type '?' to hear it again):\n").strip().lower()
+            
+            if user_input == "?":
+                engine.say(word)
+                engine.runAndWait()  # Replay the word
+                continue
+            else:
+                break
         
         if user_input == word:
             score += 1
+            ding()  # Play ding sound
             print("Correct!\n")
         else:
             buzzer()  # Play buzzer sound
