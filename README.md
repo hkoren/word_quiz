@@ -1,8 +1,10 @@
-= Word Quiz
+# Word Quiz
 
-== Setting up
+## Setting up
 
 pip install pyttsx3 pygame
 
 
-== Running
+## Running
+
+python word_quiz.py
