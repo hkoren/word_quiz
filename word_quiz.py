@@ -45,9 +45,12 @@ def buzzer():
     if os.path.exists(buzzer_sound):
         sound = pygame.mixer.Sound(buzzer_sound)  # Load the sound
         sound.play()  # Play the sound
+        # Wait for the sound to finish playing
+        while pygame.mixer.get_busy():
+            time.sleep(0.1)
     else:
         print("Buzzer sound file not found!")
-    time.sleep(1)
+    time.sleep(0.5)  # Brief pause after sound
 
 # Function to play a buzzer sound (using pygame)
 def ding():
@@ -57,9 +60,12 @@ def ding():
     if os.path.exists(buzzer_sound):
         sound = pygame.mixer.Sound(buzzer_sound)  # Load the sound
         sound.play()  # Play the sound
+        # Wait for the sound to finish playing
+        while pygame.mixer.get_busy():
+            time.sleep(0.1)
     else:
         print("Buzzer sound file not found!")
-    time.sleep(2)
+    time.sleep(0.5)  # Brief pause after sound
 
 # Function to quiz the user
 def quiz_game():
