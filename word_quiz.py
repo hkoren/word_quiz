@@ -49,17 +49,26 @@ def buzzer():
     
     # Check if the buzzer sound file exists
     if os.path.exists(buzzer_sound):
-        sound = pygame.mixer.Sound(buzzer_sound)  # Load the sound
-        sound.play()  # Play the sound
-        # Wait for the sound to finish playing
+        # Temporarily pause TTS engine
+        try:
+            engine.stop()
+        except:
+            pass
+        
+        # Play sound effect
+        sound = pygame.mixer.Sound(buzzer_sound)
+        sound.play()
+        
+        # Wait for sound to finish
         while pygame.mixer.get_busy():
             time.sleep(0.1)
-        # Additional cleanup for older macOS versions
-        pygame.mixer.stop()
-        time.sleep(1.0)  # Longer pause to ensure audio system is free
         
-        # Reinitialize TTS engine for older macOS compatibility
-        engine.stop()
+        # Clean up pygame mixer completely
+        pygame.mixer.quit()
+        time.sleep(0.3)  # Brief pause
+        pygame.mixer.init()  # Reinitialize mixer
+        
+        # Reinitialize TTS engine
         engine = init_tts_engine()
     else:
         print("Buzzer sound file not found!")
@@ -72,17 +81,26 @@ def ding():
     
     # Check if the ding sound file exists
     if os.path.exists(buzzer_sound):
-        sound = pygame.mixer.Sound(buzzer_sound)  # Load the sound
-        sound.play()  # Play the sound
-        # Wait for the sound to finish playing
+        # Temporarily pause TTS engine
+        try:
+            engine.stop()
+        except:
+            pass
+        
+        # Play sound effect
+        sound = pygame.mixer.Sound(buzzer_sound)
+        sound.play()
+        
+        # Wait for sound to finish
         while pygame.mixer.get_busy():
             time.sleep(0.1)
-        # Additional cleanup for older macOS versions
-        pygame.mixer.stop()
-        time.sleep(1.0)  # Longer pause to ensure audio system is free
         
-        # Reinitialize TTS engine for older macOS compatibility
-        engine.stop()
+        # Clean up pygame mixer completely
+        pygame.mixer.quit()
+        time.sleep(0.3)  # Brief pause
+        pygame.mixer.init()  # Reinitialize mixer
+        
+        # Reinitialize TTS engine
         engine = init_tts_engine()
     else:
         print("Ding sound file not found!")
