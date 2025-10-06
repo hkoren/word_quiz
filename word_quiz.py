@@ -48,9 +48,12 @@ def buzzer():
         # Wait for the sound to finish playing
         while pygame.mixer.get_busy():
             time.sleep(0.1)
+        # Additional cleanup for older macOS versions
+        pygame.mixer.stop()
+        time.sleep(1.0)  # Longer pause to ensure audio system is free
     else:
         print("Buzzer sound file not found!")
-    time.sleep(0.5)  # Brief pause after sound
+        time.sleep(0.5)
 
 # Function to play a buzzer sound (using pygame)
 def ding():
@@ -63,9 +66,12 @@ def ding():
         # Wait for the sound to finish playing
         while pygame.mixer.get_busy():
             time.sleep(0.1)
+        # Additional cleanup for older macOS versions
+        pygame.mixer.stop()
+        time.sleep(1.0)  # Longer pause to ensure audio system is free
     else:
         print("Buzzer sound file not found!")
-    time.sleep(0.5)  # Brief pause after sound
+        time.sleep(0.5)
 
 # Function to quiz the user
 def quiz_game():
