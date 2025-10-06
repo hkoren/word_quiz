@@ -17,28 +17,34 @@ word_list = [
 ]
 
 # Initialize text-to-speech engine
-engine = pyttsx3.init()
+def init_tts_engine():
+    """Initialize or reinitialize the TTS engine"""
+    engine = pyttsx3.init()
+    
+    # List available voices and set the voice to American English if available
+    voices = engine.getProperty('voices')
+    
+    selected_voice = None
+    for voice in voices:
+        if 'en-us' in voice.id.lower():  # American English voice
+            selected_voice = voice
+            break
+    
+    if selected_voice:
+        engine.setProperty('voice', selected_voice.id)
+    
+    return engine
 
-# List available voices and set the voice to American English if available
-voices = engine.getProperty('voices')
-
-selected_voice = None
-for voice in voices:
-    if 'en-us' in voice.id.lower():  # American English voice
-        selected_voice = voice
-        break
-
-if selected_voice:
-    engine.setProperty('voice', selected_voice.id)
-    print(f"Voice set to: {selected_voice.name}")
-else:
-    print("The American English voice is not available. Using default voice.")
+# Initialize the engine once at startup
+engine = init_tts_engine()
+print(f"Voice set to: {engine.getProperty('voice')}")
 
 # Initialize pygame mixer for sound
 pygame.mixer.init()
 
 # Function to play a buzzer sound (using pygame)
 def buzzer():
+    global engine
     buzzer_sound = 'buzzer.wav'  # Path to your buzzer sound file
     
     # Check if the buzzer sound file exists
@@ -51,15 +57,20 @@ def buzzer():
         # Additional cleanup for older macOS versions
         pygame.mixer.stop()
         time.sleep(1.0)  # Longer pause to ensure audio system is free
+        
+        # Reinitialize TTS engine for older macOS compatibility
+        engine.stop()
+        engine = init_tts_engine()
     else:
         print("Buzzer sound file not found!")
         time.sleep(0.5)
 
-# Function to play a buzzer sound (using pygame)
+# Function to play a ding sound (using pygame)
 def ding():
-    buzzer_sound = 'ding.wav'  # Path to your buzzer sound file
+    global engine
+    buzzer_sound = 'ding.wav'  # Path to your ding sound file
     
-    # Check if the buzzer sound file exists
+    # Check if the ding sound file exists
     if os.path.exists(buzzer_sound):
         sound = pygame.mixer.Sound(buzzer_sound)  # Load the sound
         sound.play()  # Play the sound
@@ -69,8 +80,12 @@ def ding():
         # Additional cleanup for older macOS versions
         pygame.mixer.stop()
         time.sleep(1.0)  # Longer pause to ensure audio system is free
+        
+        # Reinitialize TTS engine for older macOS compatibility
+        engine.stop()
+        engine = init_tts_engine()
     else:
-        print("Buzzer sound file not found!")
+        print("Ding sound file not found!")
         time.sleep(0.5)
 
 # Function to quiz the user
