@@ -73,7 +73,7 @@ def quiz_game():
         printandsay("Keep practicing to improve your spelling!")
     elif score >= 5 and score < 8:
         printandsay("Good job! You're getting better at spelling.")
-    elif score == 8:
+    elif score == 8 or score == 9:
         printandsay("Excellent work! You're a spelling star!")
     else:
         printandsay("Perfect score! You're a spelling champion!")
