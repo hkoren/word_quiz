@@ -142,7 +142,7 @@ def _should_cache_component(component):
         return True
     
     # Don't cache very long phrases - they're less likely to be reused
-    return False
+    return True
 
 def _synthesize_speech_google(text):
     """Use Google Cloud TTS API with component-based caching for maximum efficiency"""
@@ -404,13 +404,15 @@ def say(text: str, pitch: int=70) -> int:
                 return result
         else:
             # Google TTS not available - use espeak directly without caching
-            # Uncomment the line below for debugging
-            # print("Using espeak directly (no caching)")
+            print(f"Google TTS failed for: '{text}' - falling back to espeak")
             pass
+    else:
+        print("Google TTS disabled - using espeak")
     
     # Use espeak directly (no file caching)
     return subprocess.run(['espeak', f'-p {pitch}', text]).returncode
 
+# Function to spell out a word with commas
 def spellitout(word):
     return ", ".join(word)
 
