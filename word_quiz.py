@@ -245,13 +245,95 @@ def printandsay(text, refresh=False):
     print(text)
     return say(text, refresh)
 
+def get_grade_levels():
+    """Get grade levels from user input"""
+    while True:
+        try:
+            grade_input = input("What grade levels do you want? (Enter comma-separated numbers 1-10, e.g., '1,2,3'): ").strip()
+            grades = [int(g.strip()) for g in grade_input.split(',')]
+            
+            # Validate grade levels
+            valid_grades = [g for g in grades if 1 <= g <= 10]
+            if not valid_grades:
+                print("Please enter valid grade levels between 1 and 10.")
+                continue
+            if len(valid_grades) != len(grades):
+                print("Some invalid grades were ignored. Using:", valid_grades)
+            
+            return valid_grades
+        except ValueError:
+            print("Please enter valid numbers separated by commas.")
+
+def get_word_type():
+    """Get word type preference from user"""
+    while True:
+        word_type = input("What type of words do you want?\n"
+                         "o: non sight words\n"
+                         "s: sight words\n"
+                         "f: 50/50 mix of sight words and non sight words\n"
+                         "r: random mix of sight words and non sight words\n"
+                         "Enter your choice: ").strip().lower()
+        
+        if word_type in ['o', 's', 'f', 'r']:
+            return word_type
+        else:
+            print("Please enter 'o', 's', 'f', or 'r'.")
+
+def build_word_pool(grades, word_type):
+    """Build word pool based on grade levels and word type"""
+    sight_words = []
+    non_sight_words = []
+    
+    # Collect words from selected grade levels
+    for grade in grades:
+        if grade in sight_word_dictionary:
+            sight_words.extend(sight_word_dictionary[grade])
+        if grade in non_sight_word_dictionary:
+            non_sight_words.extend(non_sight_word_dictionary[grade])
+    
+    # Remove duplicates
+    sight_words = list(set(sight_words))
+    non_sight_words = list(set(non_sight_words))
+    
+    # Build final word pool based on word type
+    if word_type == 's':  # sight words only
+        return sight_words
+    elif word_type == 'o':  # non sight words only
+        return non_sight_words
+    elif word_type == 'f':  # 50/50 mix
+        min_count = min(len(sight_words), len(non_sight_words))
+        if min_count < 5:
+            # If we don't have enough of one type, return all available
+            return sight_words + non_sight_words
+        else:
+            # Take equal amounts from each
+            return random.sample(sight_words, min_count) + random.sample(non_sight_words, min_count)
+    elif word_type == 'r':  # random mix
+        return sight_words + non_sight_words
+    
+    return []
+
 # Function to quiz the user
 def quiz_game():
+    # Get user preferences
+    grades = get_grade_levels()
+    word_type = get_word_type()
+    
+    # Build word pool
+    available_words = build_word_pool(grades, word_type)
+    
+    if len(available_words) < 10:
+        print(f"Warning: Only {len(available_words)} words available. Using all of them.")
+        selected_words = available_words
+    else:
+        # Select 10 unique random words from the available words
+        selected_words = random.sample(available_words, 10)
+    
+    print(f"\nStarting quiz with {len(selected_words)} words from grade levels {grades}...")
+    time.sleep(1)
+    
     score = 0
     incorrect_words = []  # List to store incorrectly spelled words
-    
-    # Select 10 unique random words from the word list
-    selected_words = random.sample(word_list, 10)
     
     # Loop through the selected words
     for word in selected_words:
