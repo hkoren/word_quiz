@@ -2,9 +2,251 @@ import random
 import os
 import time
 import subprocess
+import json
+import hashlib
+import requests
+import base64
+import warnings
+import logging
+import sys
+
+# More aggressive stderr suppression for Google Cloud warnings
+import tempfile
+
+# Create a temporary file to redirect stderr during Google Cloud operations
+_devnull = open(os.devnull, 'w')
+
+# Comprehensive Google Cloud and gRPC message suppression
+os.environ['GRPC_VERBOSITY'] = 'NONE'
+os.environ['GRPC_TRACE'] = ''
+os.environ['GOOGLE_CLOUD_LOGGING_ENABLED'] = 'false'
+os.environ['GLOG_minloglevel'] = '3'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+# Suppress pygame welcome message
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Suppress Google Cloud logging warnings
+logging.getLogger('google').setLevel(logging.CRITICAL)
+logging.getLogger('grpc').setLevel(logging.CRITICAL)
+logging.getLogger('absl').setLevel(logging.CRITICAL)
+
+import pygame
+
+# Pre-import Google Cloud modules
+try:
+    from google.cloud import texttospeech
+    from google.oauth2 import service_account
+except:
+    pass
+
+# Initialize pygame mixer for audio playback
+pygame.mixer.init()
+
+# Global variable to store authentication token
+_auth_token = None
+_use_google_tts = True  # Set to False to use espeak instead
+
+def _get_oauth_token():
+    """Get OAuth token using the credentials from voiceAPI.json"""
+    global _auth_token
+    
+    if _auth_token is None:
+        try:
+            with open('voiceAPI.json', 'r') as f:
+                credentials = json.load(f)["installed"]
+            
+            # For simplicity in this demo, we'll create a basic implementation
+            # In production, you'd want proper OAuth2 flow with refresh tokens
+            print("Note: This implementation uses a simplified approach.")
+            print("For production use, implement proper OAuth2 flow with refresh tokens.")
+            
+            # Since we have OAuth2 client credentials, we'll use a different approach
+            # We'll try to use a simple API key approach instead
+            project_id = credentials.get("project_id", "spellng-quiz")
+            
+            # For now, we'll store the project ID for potential future use
+            _auth_token = project_id
+            
+        except Exception as e:
+            print(f"Failed to get OAuth token: {e}")
+            _auth_token = False
+    
+    return _auth_token if _auth_token is not False else None
+
+def _generate_audio_filename(text):
+    """Generate a consistent filename for the given text"""
+    # Create a hash of the text for consistent filenames
+    text_hash = hashlib.md5(text.encode()).hexdigest()[:10]
+    # Clean the text for use in filename (keep only alphanumeric and some special chars)
+    clean_text = ''.join(c for c in text if c.isalnum() or c in ' -_').strip()
+    # Limit length and replace spaces with underscores
+    clean_text = clean_text[:30].replace(' ', '_')
+    return f"{clean_text}_{text_hash}.wav"
+
+def _synthesize_speech_google(text):
+    """Use Google Cloud TTS API to synthesize speech and save to file"""
+    try:
+        # Generate filename
+        filename = _generate_audio_filename(text)
+        filepath = os.path.join('voice_files', filename)
+        
+        # Check if file already exists
+        if os.path.exists(filepath):
+            return filepath
+        
+        # Ensure voice_files directory exists
+        os.makedirs('voice_files', exist_ok=True)
+        
+        # Try to use Google Cloud TTS API if properly configured
+        google_audio = _try_google_cloud_tts(text)
+        if google_audio:
+            with open(filepath, 'wb') as f:
+                f.write(google_audio)
+            # Uncomment the line below for debugging TTS generation
+            # print(f"Generated {filename} using Google Cloud TTS")
+            return filepath
+        
+        # Fallback to espeak if Google TTS fails
+        # Uncomment the line below for debugging TTS generation
+        # print(f"Google TTS not available. Using espeak to generate {filename}")
+        
+        # Use espeak to generate the audio file as a fallback
+        result = subprocess.run([
+            'espeak', 
+            text, 
+            '-w', filepath,  # Write to file
+            '-s', '150',     # Speed
+            '-p', '50'       # Pitch
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0 and os.path.exists(filepath):
+            return filepath
+        else:
+            print(f"Failed to generate audio file: {result.stderr}")
+            return None
+        
+    except Exception as e:
+        print(f"Speech synthesis failed: {e}")
+        return None
+
+def _try_google_cloud_tts(text):
+    """Try to use Google Cloud TTS API with service account credentials"""
+    try:
+        # Check if we have service account credentials
+        service_account_path = None
+        
+        # Look for service account file in common locations
+        possible_paths = [
+            'service-account-key.json',
+            'google-credentials.json',
+            os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '')
+        ]
+        
+        for path in possible_paths:
+            if path and os.path.exists(path):
+                service_account_path = path
+                break
+        
+        if not service_account_path:
+            # Try to create service account from voiceAPI.json if it's the right format
+            with open('voiceAPI.json', 'r') as f:
+                creds = json.load(f)
+            
+            # Check if this looks like a service account file
+            if isinstance(creds, dict) and creds.get('type') == 'service_account':
+                service_account_path = 'voiceAPI.json'
+            else:
+                return None  # OAuth2 credentials, not service account
+        
+        # Try to use Google Cloud TTS
+        try:
+            # Suppress stderr at file descriptor level during API calls
+            import sys
+            old_stderr_fd = os.dup(2)  # Save stderr file descriptor
+            devnull_fd = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull_fd, 2)  # Redirect stderr to devnull
+            
+            try:
+                # Modules are already imported at module level
+                # Load service account credentials
+                credentials = service_account.Credentials.from_service_account_file(service_account_path)
+                client = texttospeech.TextToSpeechClient(credentials=credentials)
+                
+                # Set up the synthesis request
+                synthesis_input = texttospeech.SynthesisInput(text=text)
+                
+                # Configure voice settings (US English, standard voice)
+                voice = texttospeech.VoiceSelectionParams(
+                    language_code="en-US",
+                    ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
+                    name="en-US-Standard-C"  # Standard female voice
+                )
+                
+                # Configure audio format
+                audio_config = texttospeech.AudioConfig(
+                    audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+                    sample_rate_hertz=24000
+                )
+                
+                # Perform the text-to-speech request
+                response = client.synthesize_speech(
+                    input=synthesis_input,
+                    voice=voice,
+                    audio_config=audio_config
+                )
+                
+                return response.audio_content
+                
+            finally:
+                # Always restore stderr
+                os.dup2(old_stderr_fd, 2)
+                os.close(old_stderr_fd)
+                os.close(devnull_fd)
+                
+        except ImportError:
+            # Google Cloud TTS library not available - silent fallback
+            return None
+        except Exception as e:
+            # Google Cloud TTS API call failed - silent fallback  
+            return None
+            
+    except Exception as e:
+        # Error setting up Google Cloud TTS - silent fallback
+        return None
+
+def _play_audio_file(filepath):
+    """Play audio file using pygame"""
+    try:
+        pygame.mixer.music.load(filepath)
+        pygame.mixer.music.play()
+        
+        # Wait for playback to complete
+        while pygame.mixer.music.get_busy():
+            pygame.time.wait(100)
+        
+        return 0  # Success
+    except Exception as e:
+        print(f"Failed to play audio file {filepath}: {e}")
+        return 1  # Error
 
 def say(text: str, pitch: int=70) -> int:
-    # Use espeak to convert text to speech.
+    """Convert text to speech using cached audio files (preferred) or espeak fallback."""
+    global _use_google_tts
+    
+    if _use_google_tts:
+        # Try to use cached/generated audio files first
+        audio_file = _synthesize_speech_google(text)
+        if audio_file:
+            return _play_audio_file(audio_file)
+        else:
+            print("Audio file generation failed, falling back to espeak")
+            _use_google_tts = False  # Disable for subsequent calls
+    
+    # Fallback to espeak
     return subprocess.run(['espeak', f'-p {pitch}', text]).returncode
 
 # List of words to be used for the quiz
