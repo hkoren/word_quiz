@@ -88,7 +88,7 @@ def _generate_audio_filename(text):
     return f"{clean_text}_{text_hash}.wav"
 
 def _parse_speech_components(text):
-    """Parse text into cacheable components, with individual letters cached independently"""
+    """Parse text into cacheable components, keeping multi-word phrases together except letter sequences"""
     import re
     
     # Handle letter sequences like "c, a, t" - split into individual letters for maximum reuse
@@ -112,15 +112,13 @@ def _parse_speech_components(text):
         
         return components
     
-    # For other text, split into words but keep punctuation attached
-    words = text.split()
-    components = []
-    
-    for word in words:
-        # Keep the word with its punctuation intact - don't separate punctuation
-        components.append(word)
-    
-    return components if components else [text]
+    # For non-letter sequences, keep the entire phrase together as a single component
+    # This preserves natural speech for phrases like:
+    # "Welcome to the Spelling Quiz Game!"
+    # "Keep practicing to improve your spelling!"
+    # "Your score: 5 out of 10"
+    # "Incorrect. The correct spelling is:"
+    return [text]
 
 def _should_cache_component(component):
     """Determine if a component should be cached (individual words and letters should be)"""
