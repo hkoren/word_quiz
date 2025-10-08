@@ -87,16 +87,149 @@ def _generate_audio_filename(text):
     clean_text = clean_text[:30].replace(' ', '_')
     return f"{clean_text}_{text_hash}.wav"
 
+def _parse_speech_components(text):
+    """Parse text into cacheable components, with individual letters cached independently"""
+    import re
+    
+    # Handle letter sequences like "c, a, t" - split into individual letters for maximum reuse
+    letter_pattern = r'\b[a-zA-Z](?:\s*,\s*[a-zA-Z])+\b'
+    if re.search(letter_pattern, text):
+        components = []
+        parts = re.split(f'({letter_pattern})', text)
+        
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+                
+            if re.match(letter_pattern, part):
+                # Split letter sequence into individual letters for caching
+                letters = re.findall(r'[a-zA-Z]', part)
+                components.extend(letters)
+            else:
+                # Recursively parse non-letter parts
+                components.extend(_parse_speech_components(part))
+        
+        return components
+    
+    # For other text, split into words but keep punctuation attached
+    words = text.split()
+    components = []
+    
+    for word in words:
+        # Keep the word with its punctuation intact - don't separate punctuation
+        components.append(word)
+    
+    return components if components else [text]
+
+def _should_cache_component(component):
+    """Determine if a component should be cached (individual words and letters should be)"""
+    # Always cache individual letters
+    if len(component) == 1 and component.isalpha():
+        return True
+    
+    # Always cache individual words (for reuse across different phrases)
+    if component.isalpha() and ' ' not in component:
+        return True
+    
+    # Cache common punctuation
+    if component in '.,!?:':
+        return True
+    
+    # Cache short phrases and numbers
+    if len(component) <= 20:
+        return True
+    
+    # Don't cache very long phrases - they're less likely to be reused
+    return False
+
 def _synthesize_speech_google(text):
-    """Use Google Cloud TTS API to synthesize speech and save to file"""
+    """Use Google Cloud TTS API with component-based caching for maximum efficiency"""
+    try:
+        # Parse text into cacheable components
+        components = _parse_speech_components(text)
+        
+        if len(components) == 1:
+            # Single component - handle normally
+            component = components[0]
+            should_cache = _should_cache_component(component)
+            
+            if should_cache:
+                # Generate filename for cached content
+                filename = _generate_audio_filename(component)
+                filepath = os.path.join('voice_files', filename)
+                
+                # Ensure voice_files directory exists
+                os.makedirs('voice_files', exist_ok=True)
+                
+                # Check if cached file exists
+                if os.path.exists(filepath):
+                    return filepath
+                
+                # Generate and cache new file
+                google_audio = _try_google_cloud_tts(component)
+                if google_audio:
+                    with open(filepath, 'wb') as f:
+                        f.write(google_audio)
+                    return filepath
+            else:
+                # Generate temporary file
+                google_audio = _try_google_cloud_tts(component)
+                if google_audio:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                        temp_file.write(google_audio)
+                        return temp_file.name
+        else:
+            # Multiple components - cache each individually and combine during playback
+            component_files = []
+            
+            for component in components:
+                should_cache = _should_cache_component(component)
+                
+                if should_cache:
+                    filename = _generate_audio_filename(component)
+                    filepath = os.path.join('voice_files', filename)
+                    
+                    # Ensure voice_files directory exists
+                    os.makedirs('voice_files', exist_ok=True)
+                    
+                    if os.path.exists(filepath):
+                        component_files.append(filepath)
+                    else:
+                        # Generate and cache component
+                        google_audio = _try_google_cloud_tts(component)
+                        if google_audio:
+                            with open(filepath, 'wb') as f:
+                                f.write(google_audio)
+                            component_files.append(filepath)
+                        else:
+                            return None  # Failed to generate component
+                else:
+                    # Generate temporary file for non-cacheable component
+                    google_audio = _try_google_cloud_tts(component)
+                    if google_audio:
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                            temp_file.write(google_audio)
+                            component_files.append(temp_file.name)
+                    else:
+                        return None  # Failed to generate component
+            
+            # Return list of component files for sequential playback
+            return component_files
+        
+        # Google TTS not available - signal to use espeak
+        return None
+        
+    except Exception as e:
+        print(f"Speech synthesis failed: {e}")
+        return None
+    """Use Google Cloud TTS API to synthesize speech and save to file, or use espeak without caching"""
     try:
         # Generate filename
         filename = _generate_audio_filename(text)
         filepath = os.path.join('voice_files', filename)
-        
-        # Check if file already exists
-        if os.path.exists(filepath):
-            return filepath
         
         # Ensure voice_files directory exists
         os.makedirs('voice_files', exist_ok=True)
@@ -104,30 +237,25 @@ def _synthesize_speech_google(text):
         # Try to use Google Cloud TTS API if properly configured
         google_audio = _try_google_cloud_tts(text)
         if google_audio:
+            # For Google TTS, check if file already exists (caching enabled)
+            if os.path.exists(filepath):
+                return filepath
+            
+            # Generate new Google TTS file
             with open(filepath, 'wb') as f:
                 f.write(google_audio)
             # Uncomment the line below for debugging TTS generation
             # print(f"Generated {filename} using Google Cloud TTS")
             return filepath
         
-        # Fallback to espeak if Google TTS fails
+        # Fallback to espeak - NO CACHING (always regenerate)
         # Uncomment the line below for debugging TTS generation
-        # print(f"Google TTS not available. Using espeak to generate {filename}")
+        # print(f"Google TTS not available. Using espeak (no caching)")
         
-        # Use espeak to generate the audio file as a fallback
-        result = subprocess.run([
-            'espeak', 
-            text, 
-            '-w', filepath,  # Write to file
-            '-s', '150',     # Speed
-            '-p', '50'       # Pitch
-        ], capture_output=True, text=True)
-        
-        if result.returncode == 0 and os.path.exists(filepath):
-            return filepath
-        else:
-            print(f"Failed to generate audio file: {result.stderr}")
-            return None
+        # For espeak, don't use cached files - always generate fresh
+        # This ensures espeak files don't take up permanent storage space
+        # and allows for real-time pronunciation adjustments
+        return None  # Signal that we should use espeak directly without file caching
         
     except Exception as e:
         print(f"Speech synthesis failed: {e}")
@@ -234,19 +362,52 @@ def _play_audio_file(filepath):
         return 1  # Error
 
 def say(text: str, pitch: int=70) -> int:
-    """Convert text to speech using cached audio files (preferred) or espeak fallback."""
+    """Convert text to speech using component-based Google TTS caching, or espeak without caching."""
     global _use_google_tts
     
     if _use_google_tts:
-        # Try to use cached/generated audio files first
-        audio_file = _synthesize_speech_google(text)
-        if audio_file:
-            return _play_audio_file(audio_file)
+        # Try to use component-based Google TTS with smart caching
+        audio_result = _synthesize_speech_google(text)
+        if audio_result:
+            if isinstance(audio_result, list):
+                # Multiple component files - play them sequentially
+                for audio_file in audio_result:
+                    result = _play_audio_file(audio_file)
+                    if result != 0:
+                        return result
+                    
+                    # Add small pause between components for natural speech
+                    import time
+                    time.sleep(0.1)
+                
+                # Clean up temporary files
+                for audio_file in audio_result:
+                    if audio_file.startswith('/tmp') or 'tmp' in audio_file:
+                        try:
+                            os.unlink(audio_file)
+                        except:
+                            pass
+                
+                return 0  # Success
+            else:
+                # Single file - play it
+                result = _play_audio_file(audio_result)
+                
+                # Clean up temporary files (non-cached files)
+                if audio_result.startswith('/tmp') or 'tmp' in audio_result:
+                    try:
+                        os.unlink(audio_result)
+                    except:
+                        pass
+                
+                return result
         else:
-            print("Audio file generation failed, falling back to espeak")
-            _use_google_tts = False  # Disable for subsequent calls
+            # Google TTS not available - use espeak directly without caching
+            # Uncomment the line below for debugging
+            # print("Using espeak directly (no caching)")
+            pass
     
-    # Fallback to espeak
+    # Use espeak directly (no file caching)
     return subprocess.run(['espeak', f'-p {pitch}', text]).returncode
 
 # List of words to be used for the quiz
@@ -474,14 +635,7 @@ non_sight_word_dictionary = {
     "peripheral", "pertinent", "plausible", "precursor", "synthesis"]}
 
 def spellitout(word):
-    # Replace 's' characters with 'ess' for better pronunciation
-    spelled_letters = []
-    for letter in word:
-        if letter.lower() == 's':
-            spelled_letters.append('ess')
-        else:
-            spelled_letters.append(letter)
-    return ", ".join(spelled_letters)
+    return ", ".join(word)
 
 def printandsay(text, refresh=False):
     print(text)
@@ -580,7 +734,8 @@ def quiz_game():
     # Loop through the selected words
     for word in selected_words:
         time.sleep(0.2)
-        say("spell " + word)
+        say("spell")
+        say(word)
         
         # Get the user's spelling attempt without showing the word
         while True:
@@ -600,7 +755,10 @@ def quiz_game():
             incorrect_words.append(word)  # Add to incorrect words list
             print(f"Incorrect. The correct spelling is: {word}\n")
             
-            say("Incorrect. " + word + " is spelled: " +spellitout(word))  # audio feedback
+            say("Incorrect.")
+            say(word)
+            say(" is spelled: ")
+            say(spellitout(word))  # audio feedback
         
     
     # Display the final score
@@ -621,6 +779,6 @@ def quiz_game():
             print(f"  - {word}")
 
 # Start the quiz
-if __name__ == "__main__":
+if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):
     printandsay("Welcome to the Spelling Quiz Game!", refresh=False)
     quiz_game()
