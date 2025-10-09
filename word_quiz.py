@@ -95,7 +95,7 @@ def _parse_speech_components(text):
     import re
     
     # Handle letter sequences like "c, a, t" - split into individual letters for maximum reuse
-    letter_pattern = r'\b[a-zA-Z](?:\s*,\s*[a-zA-Z])+\b'
+    letter_pattern = r'\b[a-zA-Z](?:\s*[, ]\s*[a-zA-Z])+\b'
     if re.search(letter_pattern, text):
         components = []
         parts = re.split(f'({letter_pattern})', text)
@@ -414,7 +414,7 @@ def say(text: str, pitch: int=70) -> int:
 
 # Function to spell out a word with commas
 def spellitout(word):
-    return ", ".join(word)
+    return " ".join(word)
 
 def printandsay(text, refresh=False):
     print(text)
@@ -551,7 +551,7 @@ def quiz_game():
     else:
         printandsay("Perfect score! You're a spelling champion!")
     
-    # Display incorrectly spelled words if any
+    # Display incorrectly spelled words if any78
     if incorrect_words:
         print("\nPlease work on spelling these words:")
         for word in incorrect_words:
