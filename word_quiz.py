@@ -559,5 +559,15 @@ def quiz_game():
 
 # Start the quiz
 if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):
+    # Count words loaded from word_lists.py
+    sight_word_count = sum(len(words) for words in sight_word_dictionary.values())
+    non_sight_word_count = sum(len(words) for words in non_sight_word_dictionary.values())
+    total_word_count = sight_word_count + non_sight_word_count
+    
+    print(f"Loaded {total_word_count} words:")
+    print(f"  - {sight_word_count} sight words")
+    print(f"  - {non_sight_word_count} other words")
+    print()
+    
     printandsay("Welcome to the Spelling Quiz Game!", refresh=False)
     quiz_game()
