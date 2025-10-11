@@ -9,6 +9,7 @@ import base64
 import warnings
 import logging
 import sys
+from datetime import datetime
 
 # Import word lists from separate module
 from word_lists import word_list, sight_word_dictionary, non_sight_word_dictionary
@@ -488,6 +489,40 @@ def build_word_pool(grades, word_type):
     
     return []
 
+def save_session_data(grades, word_type, correct_count, incorrect_count, incorrect_words):
+    """Save quiz session data to sessions.json"""
+    try:
+        # Create session record
+        session_data = {
+            "date_time": datetime.now().isoformat(),
+            "grades": grades,
+            "word_type": word_type,
+            "correct_count": correct_count,
+            "incorrect_count": incorrect_count,
+            "incorrect_words": incorrect_words,
+            "total_words": correct_count + incorrect_count
+        }
+        
+        # Load existing sessions or create new list
+        sessions_file = "sessions.json"
+        if os.path.exists(sessions_file):
+            with open(sessions_file, 'r') as f:
+                sessions = json.load(f)
+        else:
+            sessions = []
+        
+        # Add new session
+        sessions.append(session_data)
+        
+        # Save updated sessions
+        with open(sessions_file, 'w') as f:
+            json.dump(sessions, f, indent=2)
+        
+        print(f"Session saved to {sessions_file}")
+        
+    except Exception as e:
+        print(f"Failed to save session data: {e}")
+
 # Function to quiz the user
 def quiz_game():
     # Get user preferences
@@ -551,11 +586,16 @@ def quiz_game():
     else:
         printandsay("Perfect score! You're a spelling champion!")
     
-    # Display incorrectly spelled words if any78
+    # Display incorrectly spelled words if any
     if incorrect_words:
         print("\nPlease work on spelling these words:")
         for word in incorrect_words:
             print(f"  - {word}")
+    
+    # Save session data
+    correct_count = score
+    incorrect_count = len(incorrect_words)
+    save_session_data(grades, word_type, correct_count, incorrect_count, incorrect_words)
 
 # Start the quiz
 if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):
