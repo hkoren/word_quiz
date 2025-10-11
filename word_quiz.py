@@ -9,7 +9,7 @@ import base64
 import warnings
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Import word lists from separate module
 from word_lists import word_list, sight_word_dictionary, non_sight_word_dictionary
@@ -523,6 +523,87 @@ def save_session_data(grades, word_type, correct_count, incorrect_count, incorre
     except Exception as e:
         print(f"Failed to save session data: {e}")
 
+def show_play_statistics():
+    """Display comprehensive play statistics from sessions.json"""
+    try:
+        sessions_file = "sessions.json"
+        if not os.path.exists(sessions_file):
+            print("No session data available yet.")
+            return
+        
+        with open(sessions_file, 'r') as f:
+            sessions = json.load(f)
+        
+        if not sessions:
+            print("No session data available yet.")
+            return
+        
+        # Calculate date one week ago
+        one_week_ago = datetime.now() - timedelta(days=7)
+        
+        # Initialize counters
+        total_sessions = len(sessions)
+        sessions_last_week = 0
+        total_correct = 0
+        total_words = 0
+        correct_last_week = 0
+        words_last_week = 0
+        all_incorrect_words = []
+        
+        # Process each session
+        for session in sessions:
+            session_date = datetime.fromisoformat(session["date_time"])
+            
+            # Add to totals
+            total_correct += session["correct_count"]
+            total_words += session["total_words"]
+            all_incorrect_words.extend(session["incorrect_words"])
+            
+            # Check if session is within last week
+            if session_date >= one_week_ago:
+                sessions_last_week += 1
+                correct_last_week += session["correct_count"]
+                words_last_week += session["total_words"]
+        
+        # Calculate percentages
+        overall_percentage = (total_correct / total_words * 100) if total_words > 0 else 0
+        week_percentage = (correct_last_week / words_last_week * 100) if words_last_week > 0 else 0
+        
+        # Count misspelled words and get top 10
+        from collections import Counter
+        misspelled_counter = Counter(all_incorrect_words)
+        top_misspelled = misspelled_counter.most_common(10)
+        
+        # Display statistics
+        print("\n" + "="*50)
+        print("PLAY STATISTICS")
+        print("="*50)
+        print(f"Total sessions played: {total_sessions}")
+        print(f"Sessions in last week: {sessions_last_week}")
+        print()
+        print(f"Total words spelled correctly: {total_correct} out of {total_words}")
+        print(f"Words spelled correctly (last week): {correct_last_week} out of {words_last_week}")
+        print()
+        print(f"Overall accuracy: {overall_percentage:.1f}%")
+        if words_last_week > 0:
+            print(f"Last week accuracy: {week_percentage:.1f}%")
+        else:
+            print("Last week accuracy: No sessions in last week")
+        print()
+        
+        if top_misspelled:
+            print("TOP 10 MISSPELLED WORDS:")
+            print("-" * 30)
+            for i, (word, count) in enumerate(top_misspelled, 1):
+                print(f"{i:2}. {word:<15} ({count} time{'s' if count != 1 else ''})")
+        else:
+            print("No misspelled words recorded!")
+        
+        print("="*50)
+        
+    except Exception as e:
+        print(f"Failed to display statistics: {e}")
+
 # Function to quiz the user
 def quiz_game():
     # Get user preferences
@@ -596,6 +677,9 @@ def quiz_game():
     correct_count = score
     incorrect_count = len(incorrect_words)
     save_session_data(grades, word_type, correct_count, incorrect_count, incorrect_words)
+    
+    # Show play statistics
+    show_play_statistics()
 
 # Start the quiz
 if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):
