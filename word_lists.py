@@ -120,7 +120,28 @@ sight_word_dictionary = {
     "imply", "infer", "integrate", "interpret", "investigate",
     "justify", "maintain", "modify", "outcome", "parameter",
     "predict", "process", "proportion", "qualitative", "quantitative",
-    "relevant", "research", "significance", "theory", "valid"]}
+    "relevant", "research", "significance", "theory", "valid"],
+    11: [
+    "acquire", "ambiguous", "analyze", "anomaly", "assert",
+    "assumption", "attribute", "bias", "coherent", "comprehensive",
+    "contemporary", "convey", "correlate", "criteria", "deduce",
+    "depict", "derive", "dissent", "elaborate", "emphasize",
+    "empirical", "epitome", "evaluate", "exemplify", "explicit",
+    "fluctuate", "hypothesis", "ideology", "imply", "inherent",
+    "integrate", "interpret", "juxtapose", "legitimate", "metaphor",
+    "objective", "paradigm", "precise", "prevalent", "profound",
+    "rationale", "refute", "relevant", "significant", "substantiate",
+    "symbolic", "synthesize", "thesis", "validity", "warrant"], 
+    12: ["abstract", "advocate", "alleviate", "ambivalent", "analytical",
+    "anecdotal", "arbitrary", "assertive", "authentic", "capricious",
+    "catalyst", "circumstantial", "cohesive", "collaborate", "concise",
+    "connotation", "contradict", "corroborate", "credibility", "cumulative",
+    "definitive", "delineate", "discrepancy", "disseminate", "eloquent",
+    "empirical", "ephemeral", "equivocal", "fallacy", "feasible",
+    "hierarchy", "implicit", "incongruous", "inevitable", "innovate",
+    "juxtaposition", "lucid", "meticulous", "negligible", "objective",
+    "paradox", "plausible", "pragmatic", "reiterate", "resilient",
+    "scrutinize", "substantive", "tenuous", "ubiquitous", "vindicate"]}
 
 non_sight_word_dictionary = {
     1:["cat", "dog", "sun", "hat", "bed",
@@ -222,4 +243,26 @@ non_sight_word_dictionary = {
     "ephemeral", "erroneous", "fallacy", "feasible", "fundamental",
     "hierarchy", "ideology", "imperative", "incessant", "inevitable",
     "meticulous", "negligible", "objective", "omniscient", "paradoxical",
-    "peripheral", "pertinent", "plausible", "precursor", "synthesis"]}
+    "peripheral", "pertinent", "plausible", "precursor", "synthesis"],
+    11:[
+    "aberration", "adversity", "aesthetic", "allegory", "allusion",
+    "anachronism", "analogy", "antecedent", "arbitrary", "articulate",
+    "benevolent", "belligerent", "brevity", "cacophony", "camaraderie",
+    "candor", "catalyst", "chronology", "clandestine", "colloquial",
+    "connotation", "conscientious", "copious", "credibility", "cumulative",
+    "debacle", "delineate", "dichotomy", "discernment", "eloquence",
+    "enigma", "ephemeral", "erroneous", "exacerbate", "fallacious",
+    "fortuitous", "gregarious", "hubris", "illicit", "impeccable",
+    "innate", "lucid", "magnanimous", "meticulous", "mundane",
+    "nostalgia", "oblivion", "paradoxical", "pervasive", "resilient"],
+    12:[
+    "aberration", "acquiesce", "adversity", "aesthetic", "allegory",
+    "ambiguous", "anachronism", "animosity", "antithesis", "apathy",
+    "arbiter", "ascertain", "astute", "belligerent", "benevolent",
+    "brevity", "cacophony", "camaraderie", "candor", "censure",
+    "clandestine", "colloquial", "complacent", "conflagration", "contentious",
+    "conviction", "copious", "criterion", "culminate", "decorum",
+    "deleterious", "demagogue", "dichotomy", "disdain", "disparate",
+    "eclectic", "egregious", "elucidate", "emulate", "enigma",
+    "epiphany", "esoteric", "fastidious", "fortuitous", "gratuitous",
+    "idiosyncrasy", "magnanimous", "nonchalant", "perfunctory", "superfluous"]}
