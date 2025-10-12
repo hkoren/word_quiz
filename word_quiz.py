@@ -629,8 +629,18 @@ def quiz_game():
     incorrect_words = []  # List to store incorrectly spelled words
     
     # Loop through the selected words
-    for word in selected_words:
+    for i, word in enumerate(selected_words, 1):
         time.sleep(0.2)
+        
+        # Get definition from the unified dictionary
+        definition = word_dictionary.get(word, {}).get('definition', 'No definition available')
+        
+        print(f"\n{'='*50}")
+        print(f"Word {i} of {len(selected_words)}")
+        print(f"{'='*50}")
+        print(f"Definition: {definition}")
+        print("\nListen carefully to the word...")
+        
         say("spell")
         say(word)
         
@@ -639,7 +649,8 @@ def quiz_game():
             user_input = input("Spell the word you just heard (or type '?' to hear it again):\n").strip().lower()
             
             if user_input == "?":
-                say( word)
+                print(f"\nReminder - Definition: {definition}")
+                say(word)
                 continue
             else:
                 break
@@ -673,7 +684,8 @@ def quiz_game():
     if incorrect_words:
         print("\nPlease work on spelling these words:")
         for word in incorrect_words:
-            print(f"  - {word}")
+            definition = word_dictionary.get(word, {}).get('definition', 'No definition available')
+            print(f"  - {word}: {definition}")
     
     # Save session data
     correct_count = score
