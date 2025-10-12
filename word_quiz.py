@@ -11,8 +11,12 @@ import logging
 import sys
 from datetime import datetime, timedelta
 
+
 # Import word lists from separate module
-from word_lists import word_list, word_dictionary
+
+print(f"Loading word list...",end='')
+from word_lists import word_dictionary
+print(f"{len(word_dictionary)} words loaded")
 
 # More aggressive stderr suppression for Google Cloud warnings
 import tempfile
@@ -696,16 +700,6 @@ def quiz_game():
     show_play_statistics()
 
 # Start the quiz
-if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):
-    # Count words loaded from word_lists.py using unified dictionary
-    sight_word_count = sum(1 for data in word_dictionary.values() if data["sight_word"])
-    non_sight_word_count = sum(1 for data in word_dictionary.values() if not data["sight_word"])
-    total_word_count = sight_word_count + non_sight_word_count
-    
-    print(f"Loaded {total_word_count} words:")
-    print(f"  - {sight_word_count} sight words")
-    print(f"  - {non_sight_word_count} other words")
-    print()
-    
+if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):    
     printandsay("Welcome to the Spelling Quiz Game!", refresh=False)
     quiz_game()
