@@ -429,13 +429,13 @@ def get_grade_levels():
     """Get grade levels from user input"""
     while True:
         try:
-            grade_input = input("What grade levels do you want? (Enter comma-separated numbers 1-10, e.g., '1,2,3'): ").strip()
+            grade_input = input("What grade levels do you want? (Enter comma-separated numbers 1-12, e.g., '1,2,3' or '9,10,11,12'): ").strip()
             grades = [int(g.strip()) for g in grade_input.split(',')]
             
             # Validate grade levels
-            valid_grades = [g for g in grades if 1 <= g <= 10]
+            valid_grades = [g for g in grades if 1 <= g <= 12]
             if not valid_grades:
-                print("Please enter valid grade levels between 1 and 10.")
+                print("Please enter valid grade levels between 1 and 12.")
                 continue
             if len(valid_grades) != len(grades):
                 print("Some invalid grades were ignored. Using:", valid_grades)
