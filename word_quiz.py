@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timedelta
 
 # Import word lists from separate module
-from word_lists import word_list, sight_word_dictionary, non_sight_word_dictionary
+from word_lists import word_list, word_dictionary
 
 # More aggressive stderr suppression for Google Cloud warnings
 import tempfile
@@ -460,14 +460,16 @@ def build_word_pool(grades, word_type):
     sight_words = []
     non_sight_words = []
     
-    # Collect words from selected grade levels
-    for grade in grades:
-        if grade in sight_word_dictionary:
-            sight_words.extend(sight_word_dictionary[grade])
-        if grade in non_sight_word_dictionary:
-            non_sight_words.extend(non_sight_word_dictionary[grade])
+    # Collect words from selected grade levels using unified dictionary
+    for word, data in word_dictionary.items():
+        # Check if word appears in any of the selected grade levels
+        if any(grade in data["grade_levels"] for grade in grades):
+            if data["sight_word"]:
+                sight_words.append(word)
+            else:
+                non_sight_words.append(word)
     
-    # Remove duplicates
+    # Remove duplicates (though they shouldn't exist in the new format)
     sight_words = list(set(sight_words))
     non_sight_words = list(set(non_sight_words))
     
@@ -683,9 +685,9 @@ def quiz_game():
 
 # Start the quiz
 if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):
-    # Count words loaded from word_lists.py
-    sight_word_count = sum(len(words) for words in sight_word_dictionary.values())
-    non_sight_word_count = sum(len(words) for words in non_sight_word_dictionary.values())
+    # Count words loaded from word_lists.py using unified dictionary
+    sight_word_count = sum(1 for data in word_dictionary.values() if data["sight_word"])
+    non_sight_word_count = sum(1 for data in word_dictionary.values() if not data["sight_word"])
     total_word_count = sight_word_count + non_sight_word_count
     
     print(f"Loaded {total_word_count} words:")
