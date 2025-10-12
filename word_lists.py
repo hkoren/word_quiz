@@ -1,16 +1,5 @@
 # Word lists for the spelling quiz game
 
-# List of words to be used for the quiz
-word_list = [
-    "adventure", "bicycle", "calendar", "delicious", "elephant", "fierce", 
-    "gentle", "hurricane", "island", "journey", "knowledge", "library", 
-    "mountain", "nervous", "ocean", "puzzle", "question", "robot", "school", 
-    "thunder", "umbrella", "vacation", "window", "yellow", "zookeeper", "athlete", 
-    "brave", "celebrate", "dictionary", "excited", "favorite", "guitar", "holiday", 
-    "ingredient", "jealous", "kindness", "letter", "melody", "nature", "ocean", 
-    "peaceful", "quarter", "rainbow", "surprise", "trust", "unusual", "victory", 
-    "wonder", "xylophone", "youthful"
-]
 
 # Unified word dictionary with grade levels, sight word classification, and definitions
 word_dictionary = {
