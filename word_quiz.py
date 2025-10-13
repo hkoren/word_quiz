@@ -425,11 +425,47 @@ def printandsay(text, refresh=False):
     print(text)
     return say(text, refresh)
 
+def load_defaults():
+    """Load default settings from defaults.json"""
+    try:
+        if os.path.exists('defaults.json'):
+            with open('defaults.json', 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading defaults: {e}")
+    
+    # Return default values if file doesn't exist or can't be read
+    return {
+        'grade_levels': [3, 4, 5],
+        'word_type': 'r'
+    }
+
+def save_defaults(grade_levels, word_type):
+    """Save default settings to defaults.json"""
+    try:
+        defaults = {
+            'grade_levels': grade_levels,
+            'word_type': word_type
+        }
+        with open('defaults.json', 'w') as f:
+            json.dump(defaults, f, indent=2)
+    except Exception as e:
+        print(f"Error saving defaults: {e}")
+
 def get_grade_levels():
     """Get grade levels from user input"""
+    defaults = load_defaults()
+    default_grades = defaults['grade_levels']
+    default_str = ','.join(map(str, default_grades))
+    
     while True:
         try:
-            grade_input = input("What grade levels do you want? (Enter comma-separated numbers 1-12, e.g., '1,2,3' or '9,10,11,12'): ").strip()
+            grade_input = input(f"What grade levels do you want? (Enter comma-separated numbers 1-12, e.g., '1,2,3' or '9,10,11,12') [enter for {default_str}]: ").strip()
+            
+            # If user just hits enter, use defaults
+            if not grade_input:
+                return default_grades
+            
             grades = [int(g.strip()) for g in grade_input.split(',')]
             
             # Validate grade levels
@@ -446,14 +482,30 @@ def get_grade_levels():
 
 def get_word_type():
     """Get word type preference from user"""
+    defaults = load_defaults()
+    default_type = defaults['word_type']
+    
+    # Map word type codes to descriptions for the default display
+    type_descriptions = {
+        'o': 'non sight words',
+        's': 'sight words', 
+        'f': '50/50 mix',
+        'r': 'random mix'
+    }
+    default_desc = type_descriptions.get(default_type, 'random mix')
+    
     while True:
         word_type = input("What type of words do you want?\n"
                          "o: non sight words\n"
                          "s: sight words\n"
                          "f: 50/50 mix of sight words and non sight words\n"
                          "r: random mix of sight words and non sight words\n"
-                         "Enter your choice: ").strip().lower()
+                         f"Enter your choice [enter for {default_type} ({default_desc})]: ").strip().lower()
         
+        # If user just hits enter, use defaults
+        if not word_type:
+            return default_type
+            
         if word_type in ['o', 's', 'f', 'r']:
             return word_type
         else:
@@ -615,6 +667,9 @@ def quiz_game():
     # Get user preferences
     grades = get_grade_levels()
     word_type = get_word_type()
+    
+    # Save the user's choices as new defaults
+    save_defaults(grades, word_type)
     
     # Build word pool
     available_words = build_word_pool(grades, word_type)
