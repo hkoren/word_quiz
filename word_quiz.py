@@ -662,15 +662,8 @@ def show_play_statistics():
     except Exception as e:
         print(f"Failed to display statistics: {e}")
 
-# Function to quiz the user
-def quiz_game():
-    # Get user preferences
-    grades = get_grade_levels()
-    word_type = get_word_type()
-    
-    # Save the user's choices as new defaults
-    save_defaults(grades, word_type)
-    
+def run_single_quiz(grades, word_type):
+    """Run a single quiz game with the given settings"""
     # Build word pool
     available_words = build_word_pool(grades, word_type)
     
@@ -754,7 +747,46 @@ def quiz_game():
     # Show play statistics
     show_play_statistics()
 
+def ask_play_again():
+    """Ask user if they want to play again, with setup option"""
+    while True:
+        choice = input("\nWould you like to play again?\n"
+                      "y - Yes (same settings)\n"
+                      "n - No (quit)\n"
+                      "s - Setup (change settings)\n"
+                      "Enter your choice: ").strip().lower()
+        
+        if choice in ['y', 'n', 's']:
+            return choice
+        else:
+            print("Please enter 'y', 'n', or 's'.")
+
+def main_game_loop():
+    """Main game loop that handles play again functionality"""
+    printandsay("Welcome to the Spelling Quiz Game!", refresh=False)
+    
+    # First game - always ask for setup
+    grades = get_grade_levels()
+    word_type = get_word_type()
+    save_defaults(grades, word_type)
+    
+    while True:
+        # Run the quiz game with current settings
+        run_single_quiz(grades, word_type)
+        
+        # Ask if user wants to play again
+        choice = ask_play_again()
+        
+        if choice == 'n':
+            print("Thanks for playing! Goodbye!")
+            break
+        elif choice == 's':
+            # Get new settings
+            grades = get_grade_levels()
+            word_type = get_word_type()
+            save_defaults(grades, word_type)
+        # If choice == 'y', continue with same settings
+
 # Start the quiz
 if __name__ == "__main__" and not os.environ.get('TESTING_MODE'):    
-    printandsay("Welcome to the Spelling Quiz Game!", refresh=False)
-    quiz_game()
+    main_game_loop()
