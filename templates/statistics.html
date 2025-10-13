@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-chart-bar"></i> Quiz Statistics
+    </h2>
+    
+    {% if overall_stats %}
+    <!-- Overall Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stats-card text-center">
+                <h3 class="text-primary">{{ overall_stats.total_sessions }}</h3>
+                <p class="mb-0">Total Quizzes</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card text-center">
+                <h3 class="text-success">{{ "%.1f"|format(overall_stats.avg_percentage or 0) }}%</h3>
+                <p class="mb-0">Average Score</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card text-center">
+                <h3 class="text-info">{{ overall_stats.total_words_attempted or 0 }}</h3>
+                <p class="mb-0">Words Attempted</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card text-center">
+                <h3 class="text-warning">{{ overall_stats.total_correct or 0 }}</h3>
+                <p class="mb-0">Words Correct</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Recent Sessions -->
+    {% if recent_sessions %}
+    <div class="mb-4">
+        <h4><i class="fas fa-history"></i> Recent Quiz Sessions</h4>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Grades</th>
+                        <th>Words</th>
+                        <th>Correct</th>
+                        <th>Score</th>
+                        <th>Word Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in recent_sessions %}
+                    <tr>
+                        <td>{{ session.created_at.split('T')[0] if session.created_at else 'Unknown' }}</td>
+                        <td>
+                            {% set grades = session.grades | from_json if session.grades else [] %}
+                            {{ grades | join(', ') if grades else 'Unknown' }}
+                        </td>
+                        <td>{{ session.total_words or 0 }}</td>
+                        <td>{{ session.correct_count or 0 }}</td>
+                        <td>
+                            {% if session.percentage is not none %}
+                                <span class="badge {% if session.percentage >= 90 %}bg-success{% elif session.percentage >= 80 %}bg-info{% elif session.percentage >= 70 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ "%.1f"|format(session.percentage) }}%
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">0%</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if session.word_type == 's' %}
+                                <span class="badge bg-primary">Sight Words</span>
+                            {% elif session.word_type == 'o' %}
+                                <span class="badge bg-secondary">Regular Words</span>
+                            {% elif session.word_type == 'f' %}
+                                <span class="badge bg-info">50/50 Mix</span>
+                            {% else %}
+                                <span class="badge bg-warning">Random Mix</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center mb-4">
+        <div class="alert alert-info">
+            <h4><i class="fas fa-info-circle"></i> No Statistics Yet</h4>
+            <p class="mb-0">Take some quizzes to see your progress statistics here!</p>
+            <a href="{{ url_for('setup') }}" class="btn btn-primary mt-3">
+                <i class="fas fa-play"></i> Take Your First Quiz
+            </a>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if error %}
+    <div class="alert alert-danger">
+        <h4><i class="fas fa-exclamation-triangle"></i> Error Loading Statistics</h4>
+        <p class="mb-0">{{ error }}</p>
+    </div>
+    {% endif %}
+    
+    <!-- Action Buttons -->
+    <div class="text-center">
+        <a href="{{ url_for('setup') }}" class="btn btn-primary btn-lg">
+            <i class="fas fa-plus"></i> Take New Quiz
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Add custom filter for JSON parsing in template
+// This would normally be done in Flask app, but here's a fallback
+$(document).ready(function() {
+    // Any additional statistics JavaScript can go here
+    console.log('Statistics page loaded');
+});
+</script>
+{% endblock %}

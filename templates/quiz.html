@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz - Word {{ current_index }} of {{ total_words }}{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <!-- Progress Bar -->
+    <div class="mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h4>Word {{ current_index }} of {{ total_words }}</h4>
+            <span class="badge bg-primary">{{ ((current_index / total_words) * 100) | round }}%</span>
+        </div>
+        <div class="progress" style="height: 10px;">
+            <div class="progress-bar" role="progressbar" 
+                 style="width: {{ (current_index / total_words) * 100 }}%"></div>
+        </div>
+    </div>
+    
+    <!-- Definition -->
+    <div class="definition-box">
+        <h5><i class="fas fa-book-open"></i> Definition:</h5>
+        <p class="mb-0">{{ definition }}</p>
+    </div>
+    
+    <!-- Audio Controls -->
+    <div class="text-center mb-4">
+        <button class="btn btn-outline-primary btn-lg" id="playWord" type="button">
+            <i class="fas fa-play"></i> Play Word
+        </button>
+        <button class="btn btn-outline-secondary" id="playAgain" type="button" style="display: none;">
+            <i class="fas fa-redo"></i> Play Again
+        </button>
+    </div>
+    
+    <!-- Answer Input -->
+    <div class="text-center">
+        <input type="text" 
+               class="form-control answer-input" 
+               id="userAnswer" 
+               placeholder="Type the spelling here..."
+               autocomplete="off"
+               spellcheck="false">
+        
+        <button class="btn btn-primary btn-lg mt-3" id="submitAnswer" type="button">
+            <i class="fas fa-check"></i> Submit Answer
+        </button>
+    </div>
+    
+    <!-- Feedback Area -->
+    <div id="feedback" class="text-center mt-4" style="display: none;">
+        <div id="feedbackContent"></div>
+        <button class="btn btn-success btn-lg mt-3" id="nextWord" type="button" style="display: none;">
+            <i class="fas fa-arrow-right"></i> Next Word
+        </button>
+        <button class="btn btn-primary btn-lg mt-3" id="viewResults" type="button" style="display: none;">
+            <i class="fas fa-trophy"></i> View Results
+        </button>
+    </div>
+</div>
+
+<!-- Word data for audio -->
+<script>
+    const currentWord = "{{ word }}";
+    const currentDefinition = "{{ definition }}";
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    let hasPlayed = false;
+    
+    // Text-to-speech function
+    function speakWord(text) {
+        if ('speechSynthesis' in window) {
+            // Cancel any ongoing speech
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.8;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            // Try to use a good voice
+            const voices = window.speechSynthesis.getVoices();
+            const englishVoices = voices.filter(voice => 
+                voice.lang.startsWith('en-') && 
+                (voice.name.includes('Female') || voice.name.includes('Male'))
+            );
+            
+            if (englishVoices.length > 0) {
+                utterance.voice = englishVoices[0];
+            }
+            
+            window.speechSynthesis.speak(utterance);
+            
+            utterance.onend = function() {
+                $('#playWord').html('<i class="fas fa-play"></i> Play Word');
+                $('#playAgain').show();
+                hasPlayed = true;
+            };
+            
+            utterance.onstart = function() {
+                $('#playWord').html('<i class="fas fa-volume-up"></i> Playing...');
+            };
+        } else {
+            alert('Text-to-speech is not supported in your browser.');
+        }
+    }
+    
+    // Load voices
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = function() {
+            // Voices loaded
+        };
+    }
+    
+    // Play word button
+    $('#playWord, #playAgain').click(function() {
+        speakWord(currentWord);
+    });
+    
+    // Auto-play word on page load
+    setTimeout(function() {
+        speakWord(currentWord);
+    }, 500);
+    
+    // Handle Enter key in input
+    $('#userAnswer').keypress(function(e) {
+        if (e.which === 13) { // Enter key
+            $('#submitAnswer').click();
+        }
+    });
+    
+    // Focus on input
+    $('#userAnswer').focus();
+    
+    // Submit answer
+    $('#submitAnswer').click(function() {
+        const answer = $('#userAnswer').val().trim();
+        
+        if (!answer) {
+            alert('Please enter your spelling.');
+            return;
+        }
+        
+        // Disable input and button
+        $('#userAnswer').prop('disabled', true);
+        $('#submitAnswer').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Checking...');
+        
+        // Submit answer
+        $.ajax({
+            url: '/submit_answer',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ answer: answer }),
+            success: function(response) {
+                showFeedback(response);
+            },
+            error: function() {
+                alert('Error submitting answer. Please try again.');
+                $('#userAnswer').prop('disabled', false);
+                $('#submitAnswer').prop('disabled', false).html('<i class="fas fa-check"></i> Submit Answer');
+            }
+        });
+    });
+    
+    function showFeedback(response) {
+        let feedbackHtml = '';
+        
+        if (response.correct) {
+            feedbackHtml = `
+                <div class="alert alert-success">
+                    <h4><i class="fas fa-check-circle"></i> Correct!</h4>
+                    <p class="mb-0">Great job spelling "<strong>${response.correct_answer}</strong>"</p>
+                </div>
+            `;
+        } else {
+            feedbackHtml = `
+                <div class="alert alert-danger">
+                    <h4><i class="fas fa-times-circle"></i> Not quite right</h4>
+                    <p>You spelled: "<strong>${$('#userAnswer').val()}</strong>"</p>
+                    <p>Correct spelling: "<strong>${response.correct_answer}</strong>"</p>
+                    <p class="mb-0"><em>${response.definition}</em></p>
+                </div>
+            `;
+        }
+        
+        $('#feedbackContent').html(feedbackHtml);
+        $('#feedback').show();
+        
+        if (response.is_complete) {
+            $('#viewResults').show();
+        } else {
+            $('#nextWord').show();
+        }
+    }
+    
+    // Next word button
+    $('#nextWord').click(function() {
+        window.location.reload();
+    });
+    
+    // View results button
+    $('#viewResults').click(function() {
+        window.location.href = '/results';
+    });
+});
+</script>
+{% endblock %}

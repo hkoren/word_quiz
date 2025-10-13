@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz Results{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <div class="text-center mb-4">
+        <h2><i class="fas fa-trophy"></i> Quiz Results</h2>
+    </div>
+    
+    <!-- Score Summary -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="stats-card text-center">
+                <h3 class="text-primary">{{ correct_count }}</h3>
+                <p class="mb-0">Correct</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card text-center">
+                <h3 class="text-danger">{{ incorrect_count }}</h3>
+                <p class="mb-0">Incorrect</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card text-center">
+                <h3 class="text-success">{{ "%.1f"|format(percentage) }}%</h3>
+                <p class="mb-0">Score</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Score Message -->
+    <div class="text-center mb-4">
+        {% if percentage >= 90 %}
+        <div class="alert alert-success">
+            <h4><i class="fas fa-star"></i> Excellent Work!</h4>
+            <p class="mb-0">You're a spelling superstar! Keep up the great work.</p>
+        </div>
+        {% elif percentage >= 80 %}
+        <div class="alert alert-info">
+            <h4><i class="fas fa-thumbs-up"></i> Great Job!</h4>
+            <p class="mb-0">You did really well! Practice a bit more to reach perfection.</p>
+        </div>
+        {% elif percentage >= 70 %}
+        <div class="alert alert-warning">
+            <h4><i class="fas fa-chart-line"></i> Good Effort!</h4>
+            <p class="mb-0">You're making progress! Keep practicing to improve your score.</p>
+        </div>
+        {% else %}
+        <div class="alert alert-secondary">
+            <h4><i class="fas fa-book"></i> Keep Practicing!</h4>
+            <p class="mb-0">Don't give up! Practice makes perfect. Try again soon.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Incorrect Words Review -->
+    {% if incorrect_answers %}
+    <div class="mb-4">
+        <h4><i class="fas fa-list"></i> Words to Review:</h4>
+        <div class="row">
+            {% for item in incorrect_answers %}
+            <div class="col-md-6 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title text-danger">{{ item.word }}</h5>
+                        <p class="card-text">
+                            <strong>You spelled:</strong> {{ item.user_answer }}<br>
+                            <strong>Correct spelling:</strong> {{ item.correct_answer }}<br>
+                            <small class="text-muted">{{ word_dictionary[item.word].definition if word_dictionary and item.word in word_dictionary else '' }}</small>
+                        </p>
+                        <button class="btn btn-sm btn-outline-primary play-word" data-word="{{ item.word }}">
+                            <i class="fas fa-play"></i> Play Word
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Quiz Info -->
+    <div class="alert alert-light">
+        <h6><i class="fas fa-info-circle"></i> Quiz Details:</h6>
+        <p class="mb-0">
+            <strong>Grade Levels:</strong> {{ grades | join(', ') }}<br>
+            <strong>Total Words:</strong> {{ total_words }}<br>
+            <strong>Date:</strong> {{ moment().format('MMMM Do YYYY, h:mm a') if moment else 'Just completed' }}
+        </p>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="text-center">
+        <a href="{{ url_for('setup') }}" class="btn btn-primary btn-lg me-3">
+            <i class="fas fa-redo"></i> Take Another Quiz
+        </a>
+        <a href="{{ url_for('statistics') }}" class="btn btn-outline-primary btn-lg">
+            <i class="fas fa-chart-bar"></i> View Statistics
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Text-to-speech for incorrect words
+    $('.play-word').click(function() {
+        const word = $(this).data('word');
+        
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(word);
+            utterance.rate = 0.8;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            const voices = window.speechSynthesis.getVoices();
+            const englishVoices = voices.filter(voice => 
+                voice.lang.startsWith('en-')
+            );
+            
+            if (englishVoices.length > 0) {
+                utterance.voice = englishVoices[0];
+            }
+            
+            $(this).html('<i class="fas fa-volume-up"></i> Playing...');
+            
+            utterance.onend = () => {
+                $(this).html('<i class="fas fa-play"></i> Play Word');
+            };
+            
+            window.speechSynthesis.speak(utterance);
+        }
+    });
+});
+</script>
+{% endblock %}

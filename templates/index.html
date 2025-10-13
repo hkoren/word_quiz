@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Spelling Quiz - Home{% endblock %}
+
+{% block content %}
+<div class="quiz-container text-center">
+    <h1 class="display-4 mb-4">
+        <i class="fas fa-spell-check text-primary"></i>
+        Web Spelling Quiz
+    </h1>
+    
+    <p class="lead mb-5">
+        Practice spelling with words from grades 1-12. Choose your grade level and word type to get started!
+    </p>
+    
+    <div class="row text-center mb-5">
+        <div class="col-md-4">
+            <div class="stats-card">
+                <i class="fas fa-graduation-cap fa-3x text-primary mb-3"></i>
+                <h4>Grades 1-12</h4>
+                <p>Complete coverage from elementary through high school</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card">
+                <i class="fas fa-book fa-3x text-success mb-3"></i>
+                <h4>860+ Words</h4>
+                <p>Comprehensive vocabulary with definitions</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stats-card">
+                <i class="fas fa-chart-line fa-3x text-info mb-3"></i>
+                <h4>Track Progress</h4>
+                <p>Monitor your spelling improvement over time</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-grid gap-3 col-md-6 mx-auto">
+        <a href="{{ url_for('setup') }}" class="btn btn-primary btn-lg">
+            <i class="fas fa-play"></i> Start New Quiz
+        </a>
+        <a href="{{ url_for('statistics') }}" class="btn btn-outline-primary btn-lg">
+            <i class="fas fa-chart-bar"></i> View Statistics
+        </a>
+    </div>
+    
+    <div class="mt-5">
+        <h5>How it works:</h5>
+        <div class="row text-start">
+            <div class="col-md-6">
+                <ol class="list-group list-group-numbered">
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Choose Grade Levels:</strong> Select one or more grade levels (1-12)
+                    </li>
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Select Word Type:</strong> Sight words, regular words, or mixed
+                    </li>
+                </ol>
+            </div>
+            <div class="col-md-6">
+                <ol class="list-group list-group-numbered" start="3">
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Take the Quiz:</strong> Listen to words and type your spelling
+                    </li>
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Review Results:</strong> See your score and learn from mistakes
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

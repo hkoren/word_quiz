@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz Setup{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <h2 class="text-center mb-4">
+        <i class="fas fa-cog"></i> Quiz Setup
+    </h2>
+    
+    <form method="POST" id="setupForm">
+        <!-- Grade Level Selection -->
+        <div class="mb-4">
+            <h4 class="mb-3">Select Grade Levels:</h4>
+            <div class="row">
+                {% for grade in range(1, 13) %}
+                <div class="col-md-3 col-sm-4 col-6">
+                    <div class="grade-checkbox" data-grade="{{ grade }}">
+                        <input type="checkbox" name="grades" value="{{ grade }}" id="grade{{ grade }}" class="d-none">
+                        <label for="grade{{ grade }}" class="w-100 text-center">
+                            <i class="fas fa-graduation-cap"></i>
+                            <br>Grade {{ grade }}
+                        </label>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <small class="text-muted">Select one or more grade levels for your quiz</small>
+        </div>
+        
+        <!-- Word Type Selection -->
+        <div class="mb-4">
+            <h4 class="mb-3">Word Type:</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="word_type" id="sight_words" value="s">
+                        <label class="form-check-label" for="sight_words">
+                            <i class="fas fa-eye"></i> Sight Words Only
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="word_type" id="regular_words" value="o">
+                        <label class="form-check-label" for="regular_words">
+                            <i class="fas fa-book-open"></i> Regular Words Only
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="word_type" id="fifty_fifty" value="f">
+                        <label class="form-check-label" for="fifty_fifty">
+                            <i class="fas fa-balance-scale"></i> 50/50 Mix
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="word_type" id="random_mix" value="r" checked>
+                        <label class="form-check-label" for="random_mix">
+                            <i class="fas fa-random"></i> Random Mix
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Number of Words -->
+        <div class="mb-4">
+            <h4 class="mb-3">Number of Words:</h4>
+            <select class="form-select" name="num_words" id="num_words">
+                <option value="5">5 words</option>
+                <option value="10" selected>10 words</option>
+                <option value="15">15 words</option>
+                <option value="20">20 words</option>
+                <option value="25">25 words</option>
+            </select>
+        </div>
+        
+        <!-- Available Words Display -->
+        <div class="mb-4">
+            <div class="alert alert-info" id="availableWords" style="display: none;">
+                <i class="fas fa-info-circle"></i>
+                <span id="wordCount">0</span> words available for selected criteria
+            </div>
+        </div>
+        
+        <!-- Submit Button -->
+        <div class="text-center">
+            <button type="submit" class="btn btn-primary btn-lg" id="startQuiz" disabled>
+                <i class="fas fa-play"></i> Start Quiz
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Handle grade checkbox clicks
+    $('.grade-checkbox').click(function() {
+        const checkbox = $(this).find('input[type="checkbox"]');
+        checkbox.prop('checked', !checkbox.prop('checked'));
+        
+        if (checkbox.prop('checked')) {
+            $(this).addClass('selected');
+        } else {
+            $(this).removeClass('selected');
+        }
+        
+        updateAvailableWords();
+    });
+    
+    // Handle word type changes
+    $('input[name="word_type"]').change(updateAvailableWords);
+    
+    function updateAvailableWords() {
+        const selectedGrades = $('input[name="grades"]:checked').map(function() {
+            return $(this).val();
+        }).get();
+        
+        const wordType = $('input[name="word_type"]:checked').val();
+        
+        console.log('updateAvailableWords called:', {selectedGrades, wordType});
+        
+        if (selectedGrades.length === 0) {
+            $('#availableWords').hide();
+            $('#startQuiz').prop('disabled', true);
+            return;
+        }
+        
+        // Make API call to get available words
+        const params = new URLSearchParams();
+        selectedGrades.forEach(grade => params.append('grades', grade));
+        params.append('word_type', wordType);
+        
+        console.log('Making API call with params:', params.toString());
+        
+        $.get('/api/available_words?' + params.toString())
+        .done(function(data) {
+            console.log('API response:', data);
+            $('#wordCount').text(data.count);
+            $('#availableWords').show();
+            
+            const numWords = parseInt($('#num_words').val());
+            if (data.count >= numWords) {
+                $('#startQuiz').prop('disabled', false);
+                $('#availableWords').removeClass('alert-warning').addClass('alert-info');
+                // Reset the text to just show the count
+                $('#availableWords').html('<i class="fas fa-info-circle"></i> <span id="wordCount">' + data.count + '</span> words available for selected criteria');
+            } else {
+                $('#startQuiz').prop('disabled', true);
+                $('#availableWords').removeClass('alert-info').addClass('alert-warning');
+                // Replace the text completely instead of appending
+                $('#availableWords').html('<i class="fas fa-exclamation-triangle"></i> <span id="wordCount">' + data.count + '</span> words available for selected criteria (need at least ' + numWords + ')');
+            }
+        })
+        .fail(function(xhr, status, error) {
+            console.error('API call failed:', status, error);
+            $('#availableWords').hide();
+            $('#startQuiz').prop('disabled', true);
+        });
+    }
+    
+    // Handle number of words change
+    $('#num_words').change(updateAvailableWords);
+    
+    // Form submission
+    $('#setupForm').submit(function(e) {
+        const selectedGrades = $('input[name="grades"]:checked').length;
+        if (selectedGrades === 0) {
+            e.preventDefault();
+            alert('Please select at least one grade level.');
+            return false;
+        }
+    });
+    
+    // Initial update
+    updateAvailableWords();
+});
+</script>
+{% endblock %}

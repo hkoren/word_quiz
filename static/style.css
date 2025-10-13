@@ -1,0 +1,218 @@
+/* Custom CSS for Web Spelling Quiz */
+
+.quiz-container {
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.grade-checkbox {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.grade-checkbox:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+}
+
+.word-display {
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    animation: wordAppear 0.8s ease-out;
+}
+
+@keyframes wordAppear {
+    from { 
+        opacity: 0; 
+        transform: scale(0.8); 
+    }
+    to { 
+        opacity: 1; 
+        transform: scale(1); 
+    }
+}
+
+.answer-input {
+    transition: all 0.3s ease;
+}
+
+.answer-input:focus {
+    transform: scale(1.02);
+}
+
+.stats-card {
+    transition: transform 0.3s ease;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+}
+
+.btn-primary {
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    box-shadow: 0 15px 35px rgba(102, 126, 234, 0.4);
+}
+
+/* Loading spinner */
+.spinner {
+    border: 4px solid #e9ecef;
+    border-top: 4px solid #495057; /* High contrast color */
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+
+/* High contrast improvements for alerts and form elements */
+.alert-info {
+    background-color: #d1ecf1;
+    border-color: #0c5460;
+    color: #0c5460; /* High contrast dark text */
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #856404;
+    color: #856404; /* High contrast dark text */
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    border-color: #721c24;
+    color: #721c24; /* High contrast dark text */
+}
+
+.alert-success {
+    background-color: #d4edda;
+    border-color: #155724;
+    color: #155724; /* High contrast dark text */
+}
+
+/* Form elements high contrast */
+.form-control {
+    color: #212529;
+    border-color: #6c757d;
+}
+
+.form-control:focus {
+    color: #212529;
+    border-color: #495057;
+    box-shadow: 0 0 0 0.2rem rgba(73, 80, 87, 0.25);
+}
+
+.form-select {
+    color: #212529;
+    border-color: #6c757d;
+}
+
+.form-select:focus {
+    border-color: #495057;
+    box-shadow: 0 0 0 0.2rem rgba(73, 80, 87, 0.25);
+}
+
+/* Button variants with high contrast */
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+    border-color: #4e555b;
+}
+
+.btn-success {
+    background-color: #155724;
+    border-color: #155724;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #0f4419;
+    border-color: #0a3015;
+}
+
+.btn-danger {
+    background-color: #721c24;
+    border-color: #721c24;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #5a161d;
+    border-color: #4e1419;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .quiz-container {
+        margin: 15px;
+        padding: 20px;
+    }
+    
+    .word-display {
+        font-size: 2rem;
+    }
+    
+    .answer-input {
+        font-size: 1.5rem;
+    }
+}
+
+/* Dark mode support with high contrast */
+@media (prefers-color-scheme: dark) {
+    body {
+        background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+    }
+    
+    .quiz-container {
+        background: #2d3748;
+        color: #f7fafc; /* High contrast white text */
+        border: 1px solid #4a5568;
+    }
+    
+    .stats-card {
+        background: #4a5568;
+        color: #f7fafc; /* High contrast white text */
+        border: 1px solid #718096;
+    }
+    
+    .grade-checkbox {
+        border-color: #718096;
+        color: #f7fafc;
+    }
+    
+    .grade-checkbox:hover {
+        background-color: #4a5568;
+        border-color: #a0aec0;
+    }
+    
+    .grade-checkbox.selected {
+        background-color: #718096;
+        color: #f7fafc;
+    }
+    
+    .answer-input {
+        background: #4a5568;
+        color: #f7fafc;
+        border-color: #718096;
+    }
+    
+    .definition-box {
+        background: #4a5568;
+        color: #f7fafc;
+        border-left-color: #a0aec0;
+    }
+}
