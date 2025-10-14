@@ -382,6 +382,80 @@ def play_sound_effect(filename):
     except Exception as e:
         print(f"Failed to play sound effect {filename}: {e}")
 
+def compare_spellings(correct_word, user_input):
+    """Compare correct spelling with user input and return highlighted version"""
+    if not user_input:
+        return correct_word.upper() if correct_word else ""
+    if not correct_word:
+        return ""
+    
+    correct = correct_word.lower()
+    user = user_input.lower()
+    
+    # Use dynamic programming to find optimal alignment
+    def find_alignment(s1, s2):
+        """Find the best alignment between correct word and user input"""
+        m, n = len(s1), len(s2)
+        
+        # DP table: dp[i][j] = minimum edit distance between s1[:i] and s2[:j]
+        dp = [[float('inf')] * (n + 1) for _ in range(m + 1)]
+        
+        # Base cases
+        for i in range(m + 1):
+            dp[i][0] = i
+        for j in range(n + 1):
+            dp[0][j] = j
+        
+        # Fill the DP table
+        for i in range(1, m + 1):
+            for j in range(1, n + 1):
+                if s1[i-1] == s2[j-1]:
+                    dp[i][j] = dp[i-1][j-1]  # Match - no cost
+                else:
+                    dp[i][j] = 1 + min(
+                        dp[i-1][j],      # Delete from s1 (missing char)
+                        dp[i][j-1],      # Insert to s1 (extra char in user input)
+                        dp[i-1][j-1]     # Substitute
+                    )
+        
+        # Backtrack to find the alignment
+        alignment = []
+        i, j = m, n
+        
+        while i > 0 or j > 0:
+            if i > 0 and j > 0 and s1[i-1] == s2[j-1]:
+                # Match
+                alignment.append((s1[i-1], True))
+                i -= 1
+                j -= 1
+            elif i > 0 and j > 0 and dp[i][j] == dp[i-1][j-1] + 1:
+                # Substitution - mark as incorrect
+                alignment.append((s1[i-1], False))
+                i -= 1
+                j -= 1
+            elif i > 0 and dp[i][j] == dp[i-1][j] + 1:
+                # Deletion - character missing from user input
+                alignment.append((s1[i-1], False))
+                i -= 1
+            else:
+                # Insertion - extra character in user input, skip it
+                j -= 1
+        
+        return list(reversed(alignment))
+    
+    # Get the alignment
+    alignment = find_alignment(correct, user)
+    
+    # Build the highlighted result
+    highlighted = ""
+    for char, is_correct in alignment:
+        if is_correct:
+            highlighted += char.lower()  # Correct characters in lowercase
+        else:
+            highlighted += char.upper()  # Incorrect/missing characters in uppercase
+    
+    return highlighted
+
 def say(text: str, pitch: int=70) -> int:
     """Convert text to speech using component-based Google TTS caching, or espeak without caching."""
     global _use_google_tts
@@ -730,7 +804,14 @@ def run_single_quiz(grades, word_type):
         else:
             incorrect_words.append(word)  # Add to incorrect words list
             play_sound_effect("buzzer.wav")
-            print(f"Incorrect. The correct spelling is: {word}\n")
+            print(f"Incorrect.    The correct spelling is: {word}")
+            
+            # Show spelling comparison with highlights
+            correct_highlighted_spelling = compare_spellings(word, user_input)
+            incorrect_highlighted_spelling = compare_spellings(user_input, word)
+            print(f"      where you went wrong in CAPITAL: {correct_highlighted_spelling}")
+            print(f"compared with your incorrect spelling: {incorrect_highlighted_spelling}")
+            print("(lowercase = correct, UPPERCASE = incorrect/missing)\n")
             
             say(word)
             say(" is spelled: ")
