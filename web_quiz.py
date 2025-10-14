@@ -133,12 +133,26 @@ def setup():
     """Quiz setup page"""
     if request.method == 'POST':
         try:
-            grades = [int(g) for g in request.form.getlist('grades')]
+            # Handle both kindergarten ('k') and regular grades (1-12)
+            grade_inputs = request.form.getlist('grades')
+            grades = []
+            
+            for grade_input in grade_inputs:
+                if grade_input.lower() == 'k':
+                    grades.append('k')
+                else:
+                    try:
+                        grade_num = int(grade_input)
+                        if 1 <= grade_num <= 12:
+                            grades.append(grade_num)
+                    except ValueError:
+                        pass
+            
             word_type = request.form.get('word_type', 'r')
             num_words = int(request.form.get('num_words', 10))
             
-            if not grades or not all(1 <= g <= 12 for g in grades):
-                return jsonify({'error': 'Please select valid grade levels (1-12)'}), 400
+            if not grades:
+                return jsonify({'error': 'Please select valid grade levels (k for kindergarten, 1-12 for grades)'}), 400
             
             # Build word pool
             available_words = build_word_pool(grades, word_type)

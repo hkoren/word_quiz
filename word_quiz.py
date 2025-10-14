@@ -545,29 +545,38 @@ def get_grade_levels():
     """Get grade levels from user input"""
     defaults = load_defaults()
     default_grades = defaults['grade_levels']
-    default_str = ','.join(map(str, default_grades))
+    default_str = ','.join(str(g) for g in default_grades)
     
     while True:
         try:
-            grade_input = input(f"What grade levels do you want? (Enter comma-separated numbers 1-12, e.g., '1,2,3' or '9,10,11,12') [enter for {default_str}]: ").strip()
+            grade_input = input(f"What grade levels do you want? (Enter 'k' for kindergarten or numbers 1-12, e.g., 'k,1,2' or '9,10,11,12') [enter for {default_str}]: ").strip()
             
             # If user just hits enter, use defaults
             if not grade_input:
                 return default_grades
             
-            grades = [int(g.strip()) for g in grade_input.split(',')]
+            grades = []
+            for g in grade_input.split(','):
+                g = g.strip().lower()
+                if g == 'k':
+                    grades.append('k')
+                else:
+                    try:
+                        grade_num = int(g)
+                        if 1 <= grade_num <= 12:
+                            grades.append(grade_num)
+                        else:
+                            print(f"Grade {grade_num} is out of range (valid: k, 1-12)")
+                    except ValueError:
+                        print(f"Invalid grade: '{g}' (valid: k, 1-12)")
             
-            # Validate grade levels
-            valid_grades = [g for g in grades if 1 <= g <= 12]
-            if not valid_grades:
-                print("Please enter valid grade levels between 1 and 12.")
+            if not grades:
+                print("Please enter valid grade levels (k for kindergarten, 1-12 for grades).")
                 continue
-            if len(valid_grades) != len(grades):
-                print("Some invalid grades were ignored. Using:", valid_grades)
             
-            return valid_grades
-        except ValueError:
-            print("Please enter valid numbers separated by commas.")
+            return grades
+        except Exception as e:
+            print("Please enter valid grade levels separated by commas (e.g., 'k,1,2' or '5,6,7').")
 
 def get_word_type():
     """Get word type preference from user"""
