@@ -234,12 +234,24 @@ def submit_answer():
             [item['word'] for item in config['incorrect_answers']]
         )
     
-    return jsonify({
+    response_data = {
         'correct': is_correct,
         'correct_answer': current_word,
         'definition': word_dictionary[current_word]['definition'],
         'is_complete': is_complete
-    })
+    }
+    
+    # If not complete, add next word info for automatic progression
+    if not is_complete:
+        next_word = config['selected_words'][config['current_word_index']]
+        response_data.update({
+            'next_word': next_word,
+            'next_definition': word_dictionary[next_word]['definition'],
+            'next_index': config['current_word_index'] + 1,
+            'total_words': len(config['selected_words'])
+        })
+    
+    return jsonify(response_data)
 
 @app.route('/results')
 def results():
