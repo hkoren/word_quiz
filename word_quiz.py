@@ -367,6 +367,21 @@ def _play_audio_file(filepath):
         print(f"Failed to play audio file {filepath}: {e}")
         return 1  # Error
 
+def play_sound_effect(filename):
+    """Play a sound effect file"""
+    try:
+        if os.path.exists(filename):
+            pygame.mixer.music.load(filename)
+            pygame.mixer.music.play()
+            
+            # Wait for playback to complete
+            while pygame.mixer.music.get_busy():
+                pygame.time.wait(100)
+        else:
+            print(f"Sound file not found: {filename}")
+    except Exception as e:
+        print(f"Failed to play sound effect {filename}: {e}")
+
 def say(text: str, pitch: int=70) -> int:
     """Convert text to speech using component-based Google TTS caching, or espeak without caching."""
     global _use_google_tts
@@ -709,13 +724,14 @@ def run_single_quiz(grades, word_type):
         
         if user_input == word:
             score += 1
-            engine = printandsay("Correct!\n")
+            play_sound_effect("ding.wav")
+            print("Correct!\n")
 
         else:
             incorrect_words.append(word)  # Add to incorrect words list
+            play_sound_effect("buzzer.wav")
             print(f"Incorrect. The correct spelling is: {word}\n")
             
-            say("Incorrect.")
             say(word)
             say(" is spelled: ")
             say(spellitout(word))  # audio feedback
