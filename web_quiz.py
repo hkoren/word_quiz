@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Web-based Spelling Quiz Application
-Flask web application for the spelling quiz game
+Spellaroo - Web-based Spelling Quiz Application
+Flask web application for the Spellaroo spelling quiz game
 """
 
 import os
@@ -10,9 +10,16 @@ import json
 import random
 import sqlite3
 import hashlib
+import hmac
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# Google OAuth imports
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+from google_auth_oauthlib.flow import Flow
+import requests
 
 # Add the current directory to Python path to import word_lists
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -20,6 +27,46 @@ from word_lists import word_dictionary
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
+
+# Behind Apache's reverse proxy, honor X-Forwarded-Proto/Host so url_for(_external=True)
+# builds https:// URLs (required for the Google OAuth redirect_uri to match).
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
+# Session cookie hardening (Secure is relaxed for the plain-HTTP dev server in __main__)
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+
+# If no environment variables are set, use development defaults
+if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+    # Development mode - these will need to be replaced with real credentials
+    GOOGLE_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com"
+    GOOGLE_CLIENT_SECRET = "your-google-client-secret"
+    print("WARNING: Using default Google OAuth credentials. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables for production.")
+
+def create_google_oauth_flow():
+    """Create Google OAuth flow"""
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [url_for('google_callback', _external=True)]
+            }
+        },
+        scopes=['openid', 'email', 'profile']
+    )
+    flow.redirect_uri = url_for('google_callback', _external=True)
+    return flow
 
 # Add custom template filters
 @app.template_filter('from_json')
@@ -53,17 +100,73 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
+        
+        # Create users table with Google OAuth support
         conn.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                birth_year INTEGER NOT NULL,
-                birth_month INTEGER NOT NULL,
+                password_hash TEXT,
+                google_id TEXT UNIQUE,
+                birth_year INTEGER,
+                birth_month INTEGER,
+                auth_provider TEXT DEFAULT 'local',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        # Migration: Add google_id and auth_provider columns if they don't exist
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN google_id TEXT UNIQUE')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN auth_provider TEXT DEFAULT "local"')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+            
+        # Make password_hash nullable for Google OAuth users
+        try:
+            # Check if we need to migrate the table structure
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(users)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            # If password_hash is NOT NULL, we need to recreate the table
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")
+            table_sql = cursor.fetchone()[0]
+            if 'password_hash TEXT NOT NULL' in table_sql:
+                # Backup existing data
+                cursor.execute("SELECT id, name, email, password_hash, birth_year, birth_month FROM users")
+                existing_users = cursor.fetchall()
+                
+                # Drop and recreate table
+                conn.execute('DROP TABLE users')
+                conn.execute('''
+                    CREATE TABLE users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        email TEXT UNIQUE NOT NULL,
+                        password_hash TEXT,
+                        google_id TEXT UNIQUE,
+                        birth_year INTEGER,
+                        birth_month INTEGER,
+                        auth_provider TEXT DEFAULT 'local',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Restore existing data
+                for user in existing_users:
+                    conn.execute('''
+                        INSERT INTO users (id, name, email, password_hash, birth_year, birth_month, auth_provider)
+                        VALUES (?, ?, ?, ?, ?, ?, 'local')
+                    ''', user)
+        except Exception as e:
+            print(f"Migration warning: {e}")
+        
         conn.commit()
 
 def build_word_pool(grades, word_type):
@@ -132,24 +235,30 @@ def save_session_data(session_id, grades, word_type, total_words, correct_count,
         print(f"Error saving session data: {e}")
 
 def hash_password(password):
-    """Hash password using SHA1"""
-    return hashlib.sha1(password.encode('utf-8')).hexdigest()
+    """Hash password using PBKDF2 (werkzeug)"""
+    return generate_password_hash(password)
 
 def verify_password(password, password_hash):
-    """Verify password against SHA1 hash"""
-    return hashlib.sha1(password.encode('utf-8')).hexdigest() == password_hash
+    """Verify a password against a werkzeug hash, or a legacy SHA-1 hex digest."""
+    if not password_hash:
+        return False
+    if ':' in password_hash:
+        return check_password_hash(password_hash, password)
+    # Legacy SHA-1 hash (accounts created before the PBKDF2 upgrade)
+    legacy = hashlib.sha1(password.encode('utf-8')).hexdigest()
+    return hmac.compare_digest(legacy, password_hash)
 
-def create_user(name, email, password, birth_year, birth_month):
+def create_user(name, email, password=None, birth_year=None, birth_month=None, google_id=None, auth_provider='local'):
     """Create a new user account"""
     try:
-        password_hash = hash_password(password)
+        password_hash = hash_password(password) if password else None
         
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO users (name, email, password_hash, birth_year, birth_month)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (name, email, password_hash, birth_year, birth_month))
+                INSERT INTO users (name, email, password_hash, birth_year, birth_month, google_id, auth_provider)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (name, email, password_hash, birth_year, birth_month, google_id, auth_provider))
             conn.commit()
             return cursor.lastrowid
     except sqlite3.IntegrityError:
@@ -158,24 +267,86 @@ def create_user(name, email, password, birth_year, birth_month):
         print(f"Error creating user: {e}")
         return None
 
-def authenticate_user(email, password):
-    """Authenticate user by email and password"""
+def create_google_user(name, email, google_id):
+    """Create a new Google OAuth user account"""
+    return create_user(name, email, google_id=google_id, auth_provider='google')
+
+def get_user_by_google_id(google_id):
+    """Get user by Google ID"""
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, name, email, password_hash, birth_year, birth_month
+                SELECT id, name, email, birth_year, birth_month, google_id, auth_provider
+                FROM users WHERE google_id = ?
+            ''', (google_id,))
+            user = cursor.fetchone()
+            
+            if user:
+                return {
+                    'id': user[0],
+                    'name': user[1],
+                    'email': user[2],
+                    'birth_year': user[3],
+                    'birth_month': user[4],
+                    'google_id': user[5],
+                    'auth_provider': user[6]
+                }
+            return None
+    except Exception as e:
+        print(f"Error getting user by Google ID: {e}")
+        return None
+
+def get_user_by_email(email):
+    """Get user by email address"""
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, name, email, birth_year, birth_month, google_id, auth_provider
                 FROM users WHERE email = ?
             ''', (email,))
             user = cursor.fetchone()
             
-            if user and verify_password(password, user[3]):
+            if user:
+                return {
+                    'id': user[0],
+                    'name': user[1],
+                    'email': user[2],
+                    'birth_year': user[3],
+                    'birth_month': user[4],
+                    'google_id': user[5],
+                    'auth_provider': user[6]
+                }
+            return None
+    except Exception as e:
+        print(f"Error getting user by email: {e}")
+        return None
+
+def authenticate_user(email, password):
+    """Authenticate user by email and password (local auth only)"""
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, name, email, password_hash, birth_year, birth_month, auth_provider
+                FROM users WHERE email = ? AND auth_provider = 'local'
+            ''', (email,))
+            user = cursor.fetchone()
+            
+            if user and user[3] and verify_password(password, user[3]):
+                # Transparently upgrade legacy SHA-1 hashes to PBKDF2 on login
+                if ':' not in user[3]:
+                    conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                                 (hash_password(password), user[0]))
+                    conn.commit()
                 return {
                     'id': user[0],
                     'name': user[1],
                     'email': user[2],
                     'birth_year': user[4],
-                    'birth_month': user[5]
+                    'birth_month': user[5],
+                    'auth_provider': user[6]
                 }
             return None
     except Exception as e:
@@ -188,7 +359,7 @@ def get_user_by_id(user_id):
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, name, email, birth_year, birth_month
+                SELECT id, name, email, birth_year, birth_month, google_id, auth_provider
                 FROM users WHERE id = ?
             ''', (user_id,))
             user = cursor.fetchone()
@@ -199,7 +370,9 @@ def get_user_by_id(user_id):
                     'name': user[1],
                     'email': user[2],
                     'birth_year': user[3],
-                    'birth_month': user[4]
+                    'birth_month': user[4],
+                    'google_id': user[5],
+                    'auth_provider': user[6]
                 }
             return None
     except Exception as e:
@@ -285,6 +458,92 @@ def logout():
     session.clear()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
+
+# Google OAuth routes
+@app.route('/auth/google')
+def google_login():
+    """Initiate Google OAuth login"""
+    try:
+        flow = create_google_oauth_flow()
+        authorization_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true'
+        )
+        session['state'] = state
+        # google-auth-oauthlib enables PKCE by default; the code_verifier is
+        # generated here and must be replayed in the callback's token exchange.
+        session['code_verifier'] = flow.code_verifier
+        return redirect(authorization_url)
+    except Exception as e:
+        print(f"Google OAuth error: {e}")
+        flash('Google login is not available. Please use email/password login.', 'error')
+        return redirect(url_for('login'))
+
+@app.route('/auth/google/callback')
+def google_callback():
+    """Handle Google OAuth callback"""
+    try:
+        if 'state' not in session or request.args.get('state') != session['state']:
+            flash('Invalid state parameter', 'error')
+            return redirect(url_for('login'))
+        
+        flow = create_google_oauth_flow()
+        flow.code_verifier = session.get('code_verifier')
+        flow.fetch_token(authorization_response=request.url)
+        
+        credentials = flow.credentials
+        request_session = google_requests.Request()
+        
+        # Verify the token and get user info
+        idinfo = id_token.verify_oauth2_token(
+            credentials.id_token, request_session, GOOGLE_CLIENT_ID
+        )
+        
+        google_user_id = idinfo['sub']
+        email = idinfo['email']
+        name = idinfo['name']
+        
+        # Check if user exists by Google ID
+        user = get_user_by_google_id(google_user_id)
+        
+        if not user:
+            # Check if user exists by email (might be a local account)
+            existing_user = get_user_by_email(email)
+            if existing_user:
+                if existing_user['auth_provider'] == 'local':
+                    flash('An account with this email already exists. Please sign in with your email and password.', 'error')
+                    return redirect(url_for('login'))
+                else:
+                    # Update existing Google user with new Google ID
+                    user = existing_user
+            else:
+                # Create new Google user
+                user_id = create_google_user(name, email, google_user_id)
+                if user_id:
+                    user = get_user_by_id(user_id)
+                else:
+                    flash('Error creating user account', 'error')
+                    return redirect(url_for('login'))
+        
+        if user:
+            session['user_id'] = user['id']
+            session['user_name'] = user['name']
+            session['user_email'] = user['email']
+            session['auth_provider'] = 'google'
+            flash(f'Welcome, {user["name"]}!', 'success')
+            return redirect(url_for('index'))
+        else:
+            flash('Login failed', 'error')
+            return redirect(url_for('login'))
+            
+    except ValueError as e:
+        print(f"Token verification failed: {e}")
+        flash('Google authentication failed', 'error')
+        return redirect(url_for('login'))
+    except Exception as e:
+        print(f"Google OAuth callback error: {e}")
+        flash('Google login failed. Please try again.', 'error')
+        return redirect(url_for('login'))
 
 @app.route('/profile')
 @login_required
@@ -495,22 +754,24 @@ def statistics():
         with sqlite3.connect(DATABASE) as conn:
             conn.row_factory = sqlite3.Row
             
-            # Get recent sessions
+            # Get the logged-in user's recent sessions
             recent_sessions = conn.execute('''
-                SELECT * FROM sessions 
-                ORDER BY created_at DESC 
+                SELECT * FROM sessions
+                WHERE user_id = ?
+                ORDER BY created_at DESC
                 LIMIT 20
-            ''').fetchall()
-            
-            # Get overall statistics
+            ''', (session['user_id'],)).fetchall()
+
+            # Get the logged-in user's overall statistics
             overall_stats = conn.execute('''
-                SELECT 
+                SELECT
                     COUNT(*) as total_sessions,
                     AVG(percentage) as avg_percentage,
                     SUM(total_words) as total_words_attempted,
                     SUM(correct_count) as total_correct
                 FROM sessions
-            ''').fetchone()
+                WHERE user_id = ?
+            ''', (session['user_id'],)).fetchone()
             
         return render_template('statistics.html',
                              recent_sessions=recent_sessions,
@@ -565,7 +826,11 @@ def get_available_words():
         return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
+    # Dev-server-only relaxations: plain HTTP means no Secure cookies,
+    # and oauthlib must be allowed to use http:// redirect URIs.
+    app.config['SESSION_COOKIE_SECURE'] = False
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
     init_db()
-    print("Initializing web spelling quiz...")
+    print("Initializing Spellaroo...")
     print(f"Word dictionary loaded: {len(word_dictionary)} words")
     app.run(debug=True, host='0.0.0.0', port=5557)

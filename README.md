@@ -15,7 +15,7 @@ For higher quality speech synthesis, you can set up Google Cloud TTS:
 
 #### 1. Install Google Cloud TTS Library
 ```bash
-pip install google-cloud-texttospeech
+pip install google-cloud-texttospeech google-auth google-auth-oauthlib google-auth-httplib2
 ```
 
 #### 2. Set up Google Cloud Project

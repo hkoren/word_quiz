@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}My Profile - Spelling Quiz{% endblock %}
+{% block title %}My Profile - Spellaroo{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -41,13 +41,27 @@
                         </div>
                         <div class="row mb-2">
                             <div class="col-sm-4"><strong>Birth Year:</strong></div>
-                            <div class="col-sm-8">{{ user.birth_year }}</div>
+                            <div class="col-sm-8">{{ user.birth_year or 'Not specified' }}</div>
                         </div>
                         <div class="row mb-2">
                             <div class="col-sm-4"><strong>Birth Month:</strong></div>
                             <div class="col-sm-8">
-                                {% set months = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] %}
-                                {{ months[user.birth_month] }}
+                                {% if user.birth_month %}
+                                    {% set months = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] %}
+                                    {{ months[user.birth_month] }}
+                                {% else %}
+                                    Not specified
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="row mb-2">
+                            <div class="col-sm-4"><strong>Account Type:</strong></div>
+                            <div class="col-sm-8">
+                                {% if user.auth_provider == 'google' %}
+                                    <i class="fab fa-google text-danger me-2"></i>Google Account
+                                {% else %}
+                                    <i class="fas fa-envelope text-primary me-2"></i>Email Account
+                                {% endif %}
                             </div>
                         </div>
                     </div>

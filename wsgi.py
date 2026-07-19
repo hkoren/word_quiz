@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WSGI entry point for the Web Spelling Quiz application
+WSGI entry point for the Spellaroo web application
 For deployment with Apache mod_wsgi or other WSGI servers
 """
 

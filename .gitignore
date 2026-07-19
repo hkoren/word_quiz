@@ -5,3 +5,7 @@ __pycache__/*.pyc
 .DS_Store
 sessions.json
 defaults.json
+.env
+.env.local
+word_quiz/
+quiz_sessions_backup.db
