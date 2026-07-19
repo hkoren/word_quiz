@@ -15,6 +15,28 @@
     .spell-diff { color: #f7fafc; background: #4a5568; }
 }
 
+/* Word cloud (home page) */
+.word-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px 12px;
+    line-height: 1.4;
+    padding: 6px 2px;
+}
+.cloud-word {
+    display: inline-block;
+    font-weight: 700;
+    cursor: default;
+    transition: transform 0.15s ease;
+    white-space: nowrap;
+}
+.cloud-word:hover {
+    transform: scale(1.15);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+
 /* Kangaroo mascot */
 .brand-roo { font-size: 1.3rem; }
 .hero-roo {

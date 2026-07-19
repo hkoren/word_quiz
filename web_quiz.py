@@ -231,6 +231,31 @@ def init_db():
             )
         ''')
 
+        # Per-user per-word correctness tally (drives the home-page word cloud).
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS word_stats (
+                user_id INTEGER,
+                word TEXT,
+                correct INTEGER DEFAULT 0,
+                incorrect INTEGER DEFAULT 0,
+                PRIMARY KEY (user_id, word)
+            )
+        ''')
+        # One-time backfill of historical misses (correct attempts weren't
+        # recorded before this table, so only incorrects can be reconstructed).
+        already = conn.execute('SELECT COUNT(*) FROM word_stats').fetchone()[0]
+        if not already:
+            for uid, blob in conn.execute('SELECT user_id, incorrect_words FROM sessions').fetchall():
+                try:
+                    for w in json.loads(blob or '[]'):
+                        conn.execute('''
+                            INSERT INTO word_stats (user_id, word, correct, incorrect)
+                            VALUES (?, ?, 0, 1)
+                            ON CONFLICT(user_id, word) DO UPDATE SET incorrect = incorrect + 1
+                        ''', (uid, w))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
         # Admin columns on users (is_admin, is_active)
         for col, ddl in [('is_admin', 'ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'),
                          ('is_active', 'ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1')]:
@@ -305,6 +330,57 @@ def get_user_misses(user_id, limit=None):
             pass
     items = counter.most_common(limit) if limit else counter.most_common()
     return items
+
+def record_word_attempt(user_id, word, is_correct):
+    """Increment the per-user per-word correct/incorrect tally."""
+    if not user_id:
+        return
+    col = 'correct' if is_correct else 'incorrect'
+    other = 'incorrect' if is_correct else 'correct'
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute(f'''
+            INSERT INTO word_stats (user_id, word, {col}, {other})
+            VALUES (?, ?, 1, 0)
+            ON CONFLICT(user_id, word) DO UPDATE SET {col} = {col} + 1
+        ''', (user_id, word))
+        conn.commit()
+
+def build_word_cloud(user_id, n=100):
+    """Pick n random words and attach the user's accuracy + a green→red color.
+
+    Returns a list of dicts: {word, correct, incorrect, attempts, ratio, color, size}.
+    Words never attempted get a neutral color; the rest blend from red (always
+    wrong) through amber to green (always right) by accuracy ratio.
+    """
+    keys = list(word_dictionary.keys())
+    sample = random.sample(keys, min(n, len(keys)))
+
+    stats = {}
+    if user_id:
+        with sqlite3.connect(DATABASE) as conn:
+            qmarks = ','.join('?' * len(sample))
+            rows = conn.execute(
+                f'SELECT word, correct, incorrect FROM word_stats WHERE user_id = ? AND word IN ({qmarks})',
+                [user_id] + sample).fetchall()
+        stats = {w: (c, i) for w, c, i in rows}
+
+    cloud = []
+    for w in sample:
+        correct, incorrect = stats.get(w, (0, 0))
+        attempts = correct + incorrect
+        if attempts == 0:
+            ratio = None
+            color = '#8a94a6'  # neutral gray — not practiced yet
+        else:
+            ratio = correct / attempts
+            hue = int(120 * ratio)          # 0 = red, 120 = green
+            color = f'hsl({hue}, 68%, 42%)'
+        # Size grows with practice so mastered/struggled words stand out
+        size = round(min(2.6, 1.0 + attempts * 0.18) + random.uniform(0, 0.25), 2)
+        cloud.append({'word': w, 'correct': correct, 'incorrect': incorrect,
+                      'attempts': attempts, 'ratio': ratio, 'color': color, 'size': size})
+    random.shuffle(cloud)
+    return cloud
 
 def compute_streak(dates):
     """Given a set of date objects a user completed a quiz, return the current
@@ -956,7 +1032,8 @@ def index():
         return render_template('landing.html', word_count=len(word_dictionary))
     return render_template('index.html',
                            user_name=session.get('user_name'),
-                           word_count=len(word_dictionary))
+                           word_count=len(word_dictionary),
+                           word_cloud=build_word_cloud(session['user_id'], 100))
 
 @app.route('/privacy')
 def privacy():
@@ -1070,6 +1147,9 @@ def submit_answer():
 
     # Check answer
     is_correct = user_answer == current_word.lower()
+
+    # Track per-word accuracy (feeds the home-page word cloud)
+    record_word_attempt(session['user_id'], current_word, is_correct)
 
     # Character-by-character diff (lowercase = right, UPPERCASE = wrong/missing)
     diff = None if is_correct else compare_spellings(current_word, user_answer)

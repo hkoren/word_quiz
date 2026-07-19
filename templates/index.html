@@ -54,7 +54,35 @@
             <i class="fas fa-chart-bar"></i> View Statistics
         </a>
     </div>
-    
+
+    <!-- Word cloud: 100 random words colored by your spelling accuracy -->
+    {% if word_cloud %}
+    <div class="stats-card mt-5">
+        <h5 class="mb-2"><i class="fas fa-cloud me-2"></i>Your Word Cloud</h5>
+        <p class="mb-3">
+            <small class="text-muted">
+                100 random words &middot;
+                <span style="color:hsl(120,68%,42%);font-weight:bold;">green</span> = always right,
+                <span style="color:hsl(0,68%,42%);font-weight:bold;">red</span> = always wrong,
+                <span style="color:#8a94a6;font-weight:bold;">gray</span> = not tried yet.
+                Hover a word for details.
+            </small>
+        </p>
+        <div class="word-cloud">
+            {% for t in word_cloud %}
+            <span class="cloud-word"
+                  style="font-size: {{ t.size }}rem; color: {{ t.color }};"
+                  title="{{ t.word }} — {% if t.attempts %}{{ t.correct }} right / {{ t.incorrect }} wrong ({{ (t.ratio * 100) | round }}%){% else %}not attempted yet{% endif %}">{{ t.word }}</span>
+            {% endfor %}
+        </div>
+        <div class="text-center mt-3">
+            <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-shuffle me-1"></i>Shuffle words
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="mt-5">
         <h5>How it works:</h5>
         <div class="row text-start">
