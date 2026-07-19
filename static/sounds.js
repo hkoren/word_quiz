@@ -91,9 +91,59 @@
             label: 'Chime',
             correct: function () { tone(1046.5, 0, 0.5, 'sine', 0.2); tone(1568, 0, 0.5, 'sine', 0.1); },
             incorrect: function () { tone(196, 0, 0.45, 'sine', 0.22); tone(185, 0.05, 0.4, 'sine', 0.15); }
+        },
+        magic: {
+            label: 'Magic Sparkle',
+            correct: function () { // shimmering ascending sparkle
+                [1046.5, 1318.5, 1568, 2093, 2637].forEach(function (f, i) { tone(f, i * 0.06, 0.3, 'sine', 0.16); });
+            },
+            incorrect: function () { // magic fizzle down
+                [784, 659, 523, 392, 294].forEach(function (f, i) { tone(f, i * 0.06, 0.22, 'sine', 0.15); });
+            }
+        },
+        applause: {
+            label: 'Applause / Aww',
+            correct: function () { // burst of clapping that swells then fades
+                for (var i = 0; i < 16; i++) {
+                    var swell = 0.16 * (1 - Math.abs(i - 6) / 10);
+                    noise(i * 0.045 + Math.random() * 0.02, 0.05, Math.max(0.04, swell), 3500);
+                }
+            },
+            incorrect: function () { // disappointed "aww"
+                tone(440, 0, 0.25, 'triangle', 0.18);
+                glide(415, 340, 0.18, 0.35, 'triangle', 0.16);
+            }
+        },
+        boing: {
+            label: 'Boing',
+            correct: function () { glide(250, 720, 0, 0.18, 'sine', 0.22); glide(720, 600, 0.18, 0.14, 'sine', 0.14); },
+            incorrect: function () { glide(600, 140, 0, 0.35, 'sine', 0.22); glide(170, 110, 0.3, 0.2, 'sine', 0.14); }
+        },
+        laser: {
+            label: 'Laser',
+            correct: function () { glide(500, 1800, 0, 0.16, 'square', 0.14); tone(1900, 0.16, 0.1, 'square', 0.1); },
+            incorrect: function () { glide(900, 70, 0, 0.5, 'sawtooth', 0.14); } // power-down
+        },
+        birdie: {
+            label: 'Birdie',
+            correct: function () { // cheerful chirps
+                [2000, 2600, 2200, 2800, 2400].forEach(function (f, i) { tone(f, i * 0.06, 0.05, 'sine', 0.14); });
+            },
+            incorrect: function () { glide(320, 180, 0, 0.35, 'sine', 0.2); } // low descending caw
+        },
+        drumroll: {
+            label: 'Drumroll',
+            correct: function () { // snare roll into a bright cymbal crash
+                for (var i = 0; i < 9; i++) noise(i * 0.04, 0.03, 0.12, 4000);
+                noise(0.38, 0.6, 0.2, 9000);
+            },
+            incorrect: function () { // rimshot "ba-dum-tss"
+                tone(180, 0, 0.09, 'triangle', 0.2); noise(0, 0.05, 0.14, 3000);
+                noise(0.2, 0.45, 0.16, 9000);
+            }
         }
     };
-    var THEME_KEYS = ['classic', 'arcade', 'cheer', 'chime'];
+    var THEME_KEYS = ['classic', 'arcade', 'cheer', 'chime', 'magic', 'applause', 'boing', 'laser', 'birdie', 'drumroll'];
 
     function getPref() { return localStorage.getItem('spellaroo_sound') || 'classic'; }
     function setPref(v) { localStorage.setItem('spellaroo_sound', v); }
