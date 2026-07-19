@@ -68,6 +68,10 @@
                         <p class="card-text">
                             <strong>You spelled:</strong> {{ item.user_answer }}<br>
                             <strong>Correct spelling:</strong> {{ item.correct_answer }}<br>
+                            {% if item.diff %}
+                            <strong>Where it went wrong:</strong> <span class="spell-diff">{{ item.diff }}</span><br>
+                            <small class="text-muted">lowercase = correct, UPPERCASE = wrong or missing</small><br>
+                            {% endif %}
                             <small class="text-muted">{{ word_dictionary[item.word].definition if word_dictionary and item.word in word_dictionary else '' }}</small>
                         </p>
                         <button class="btn btn-sm btn-outline-primary play-word" data-word="{{ item.word }}">
@@ -87,7 +91,7 @@
         <p class="mb-0">
             <strong>Grade Levels:</strong> {{ grades | join(', ') }}<br>
             <strong>Total Words:</strong> {{ total_words }}<br>
-            <strong>Date:</strong> {{ moment().format('MMMM Do YYYY, h:mm a') if moment else 'Just completed' }}
+            <strong>Date:</strong> {{ completed_at }}
         </p>
     </div>
     
@@ -96,6 +100,11 @@
         <a href="{{ url_for('setup') }}" class="btn btn-primary btn-lg me-3">
             <i class="fas fa-redo"></i> Take Another Quiz
         </a>
+        {% if incorrect_answers %}
+        <a href="{{ url_for('practice_missed') }}" class="btn btn-warning btn-lg me-3">
+            <i class="fas fa-redo-alt"></i> Practice Missed Words
+        </a>
+        {% endif %}
         <a href="{{ url_for('statistics') }}" class="btn btn-outline-primary btn-lg">
             <i class="fas fa-chart-bar"></i> View Statistics
         </a>

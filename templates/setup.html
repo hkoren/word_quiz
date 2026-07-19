@@ -9,14 +9,16 @@
     </h2>
     
     <form method="POST" id="setupForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <!-- Grade Level Selection -->
         <div class="mb-4">
             <h4 class="mb-3">Select Grade Levels:</h4>
             <div class="row">
                 <!-- Kindergarten -->
+                {% set sel_grades = prefs.grades if prefs and prefs.grades else [] %}
                 <div class="col-md-3 col-sm-4 col-6">
-                    <div class="grade-checkbox" data-grade="k">
-                        <input type="checkbox" name="grades" value="k" id="gradek" class="d-none">
+                    <div class="grade-checkbox {{ 'selected' if 'k' in sel_grades else '' }}" data-grade="k">
+                        <input type="checkbox" name="grades" value="k" id="gradek" class="d-none" {{ 'checked' if 'k' in sel_grades else '' }}>
                         <label for="gradek" class="w-100 text-center">
                             <i class="fas fa-baby"></i>
                             <br>Kindergarten
@@ -25,8 +27,8 @@
                 </div>
                 {% for grade in range(1, 13) %}
                 <div class="col-md-3 col-sm-4 col-6">
-                    <div class="grade-checkbox" data-grade="{{ grade }}">
-                        <input type="checkbox" name="grades" value="{{ grade }}" id="grade{{ grade }}" class="d-none">
+                    <div class="grade-checkbox {{ 'selected' if grade in sel_grades else '' }}" data-grade="{{ grade }}">
+                        <input type="checkbox" name="grades" value="{{ grade }}" id="grade{{ grade }}" class="d-none" {{ 'checked' if grade in sel_grades else '' }}>
                         <label for="grade{{ grade }}" class="w-100 text-center">
                             <i class="fas fa-graduation-cap"></i>
                             <br>Grade {{ grade }}
@@ -41,10 +43,11 @@
         <!-- Word Type Selection -->
         <div class="mb-4">
             <h4 class="mb-3">Word Type:</h4>
+            {% set wt = prefs.word_type if prefs and prefs.word_type else 'r' %}
             <div class="row">
                 <div class="col-md-6">
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="word_type" id="sight_words" value="s">
+                        <input class="form-check-input" type="radio" name="word_type" id="sight_words" value="s" {{ 'checked' if wt == 's' else '' }}>
                         <label class="form-check-label" for="sight_words">
                             <i class="fas fa-eye"></i> Sight Words Only
                         </label>
@@ -52,7 +55,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="word_type" id="regular_words" value="o">
+                        <input class="form-check-input" type="radio" name="word_type" id="regular_words" value="o" {{ 'checked' if wt == 'o' else '' }}>
                         <label class="form-check-label" for="regular_words">
                             <i class="fas fa-book-open"></i> Regular Words Only
                         </label>
@@ -60,7 +63,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="word_type" id="fifty_fifty" value="f">
+                        <input class="form-check-input" type="radio" name="word_type" id="fifty_fifty" value="f" {{ 'checked' if wt == 'f' else '' }}>
                         <label class="form-check-label" for="fifty_fifty">
                             <i class="fas fa-balance-scale"></i> 50/50 Mix
                         </label>
@@ -68,7 +71,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-check form-check-inline">
-                        <input class="form-check-input" type="radio" name="word_type" id="random_mix" value="r" checked>
+                        <input class="form-check-input" type="radio" name="word_type" id="random_mix" value="r" {{ 'checked' if wt == 'r' else '' }}>
                         <label class="form-check-label" for="random_mix">
                             <i class="fas fa-random"></i> Random Mix
                         </label>
@@ -80,12 +83,11 @@
         <!-- Number of Words -->
         <div class="mb-4">
             <h4 class="mb-3">Number of Words:</h4>
+            {% set nw = prefs.num_words if prefs and prefs.num_words else 10 %}
             <select class="form-select" name="num_words" id="num_words">
-                <option value="5">5 words</option>
-                <option value="10" selected>10 words</option>
-                <option value="15">15 words</option>
-                <option value="20">20 words</option>
-                <option value="25">25 words</option>
+                {% for n in [5, 10, 15, 20, 25] %}
+                <option value="{{ n }}" {{ 'selected' if nw == n else '' }}>{{ n }} words</option>
+                {% endfor %}
             </select>
         </div>
         
@@ -133,9 +135,7 @@ $(document).ready(function() {
         }).get();
         
         const wordType = $('input[name="word_type"]:checked').val();
-        
-        console.log('updateAvailableWords called:', {selectedGrades, wordType});
-        
+
         if (selectedGrades.length === 0) {
             $('#availableWords').hide();
             $('#startQuiz').prop('disabled', true);
@@ -146,12 +146,9 @@ $(document).ready(function() {
         const params = new URLSearchParams();
         selectedGrades.forEach(grade => params.append('grades', grade));
         params.append('word_type', wordType);
-        
-        console.log('Making API call with params:', params.toString());
-        
+
         $.get('/api/available_words?' + params.toString())
         .done(function(data) {
-            console.log('API response:', data);
             $('#wordCount').text(data.count);
             $('#availableWords').show();
             
@@ -168,8 +165,7 @@ $(document).ready(function() {
                 $('#availableWords').html('<i class="fas fa-exclamation-triangle"></i> <span id="wordCount">' + data.count + '</span> words available for selected criteria (need at least ' + numWords + ')');
             }
         })
-        .fail(function(xhr, status, error) {
-            console.error('API call failed:', status, error);
+        .fail(function() {
             $('#availableWords').hide();
             $('#startQuiz').prop('disabled', true);
         });

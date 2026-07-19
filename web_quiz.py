@@ -7,13 +7,18 @@ Flask web application for the Spellaroo spelling quiz game
 import os
 import sys
 import json
+import time
 import random
+import secrets
 import sqlite3
 import hashlib
 import hmac
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Google OAuth imports
 from google.auth.transport import requests as google_requests
@@ -26,7 +31,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from word_lists import word_dictionary
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
+
+# SECRET_KEY is mandatory outside the dev server; a signed session cookie with a
+# known key is forgeable. In debug we fall back to an ephemeral random key.
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    if os.environ.get('FLASK_DEBUG') or __name__ == '__main__':
+        _secret = secrets.token_hex(32)
+        print("WARNING: SECRET_KEY not set; using an ephemeral dev key (sessions reset on restart).")
+    else:
+        raise RuntimeError("SECRET_KEY environment variable must be set in production.")
+app.secret_key = _secret
 
 # Behind Apache's reverse proxy, honor X-Forwarded-Proto/Host so url_for(_external=True)
 # builds https:// URLs (required for the Google OAuth redirect_uri to match).
@@ -39,6 +54,14 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
 )
+
+# CSRF protection for all state-changing POSTs (forms send a hidden csrf_token;
+# AJAX sends it via the X-CSRFToken header — see base.html).
+csrf = CSRFProtect(app)
+
+# Rate limiting (brute-force protection on auth routes). In-memory storage is
+# fine for a single gunicorn host; move to Redis if scaled to multiple workers/hosts.
+limiter = Limiter(get_remote_address, app=app, default_limits=[])
 
 # Google OAuth Configuration
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
@@ -67,6 +90,15 @@ def create_google_oauth_flow():
     )
     flow.redirect_uri = url_for('google_callback', _external=True)
     return flow
+
+@app.context_processor
+def inject_globals():
+    """Expose common values (current year, login state) to all templates."""
+    return {
+        'current_year': datetime.now().year,
+        'logged_in': 'user_id' in session,
+        'nav_user_name': session.get('user_name'),
+    }
 
 # Add custom template filters
 @app.template_filter('from_json')
@@ -166,8 +198,145 @@ def init_db():
                     ''', user)
         except Exception as e:
             print(f"Migration warning: {e}")
-        
+
+        # Server-side quiz state: keeps the answer list off the client cookie.
+        # The cookie only holds an opaque quiz_id token.
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS quiz_state (
+                quiz_id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                config TEXT,
+                updated_at REAL,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+
+        # Per-user saved quiz preferences (remembers last setup choices).
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS user_prefs (
+                user_id INTEGER PRIMARY KEY,
+                prefs TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+        ''')
+
         conn.commit()
+
+def save_user_prefs(user_id, prefs):
+    """Remember a user's last quiz setup (grades, word type, count)."""
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute('INSERT OR REPLACE INTO user_prefs (user_id, prefs) VALUES (?, ?)',
+                     (user_id, json.dumps(prefs)))
+        conn.commit()
+
+def load_user_prefs(user_id):
+    with sqlite3.connect(DATABASE) as conn:
+        row = conn.execute('SELECT prefs FROM user_prefs WHERE user_id = ?', (user_id,)).fetchone()
+    return json.loads(row[0]) if row else None
+
+def get_user_misses(user_id, limit=None):
+    """Aggregate a user's historically misspelled words, most-frequent first.
+    Returns a list of (word, count)."""
+    from collections import Counter
+    counter = Counter()
+    with sqlite3.connect(DATABASE) as conn:
+        rows = conn.execute('SELECT incorrect_words FROM sessions WHERE user_id = ?', (user_id,)).fetchall()
+    for (blob,) in rows:
+        try:
+            for w in json.loads(blob or '[]'):
+                if w in word_dictionary:
+                    counter[w] += 1
+        except (json.JSONDecodeError, TypeError):
+            pass
+    items = counter.most_common(limit) if limit else counter.most_common()
+    return items
+
+def compute_streak(dates):
+    """Given a set of date objects a user completed a quiz, return the current
+    consecutive-day streak ending today or yesterday."""
+    from datetime import date, timedelta
+    if not dates:
+        return 0
+    days = set(dates)
+    today = datetime.now().date()
+    # Streak counts only if the user played today or yesterday.
+    start = today if today in days else (today - timedelta(days=1) if (today - timedelta(days=1)) in days else None)
+    if start is None:
+        return 0
+    streak, d = 0, start
+    while d in days:
+        streak += 1
+        d -= timedelta(days=1)
+    return streak
+
+# ---- Server-side quiz-state helpers -------------------------------------------------
+
+def save_quiz_state(quiz_id, user_id, config):
+    """Persist quiz config (word list, progress) server-side, keyed by opaque token."""
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute(
+            'INSERT OR REPLACE INTO quiz_state (quiz_id, user_id, config, updated_at) VALUES (?, ?, ?, ?)',
+            (quiz_id, user_id, json.dumps(config), time.time())
+        )
+        conn.commit()
+
+def load_quiz_state(quiz_id, user_id):
+    """Load a quiz config, but only if it belongs to this user."""
+    if not quiz_id:
+        return None
+    with sqlite3.connect(DATABASE) as conn:
+        row = conn.execute(
+            'SELECT config FROM quiz_state WHERE quiz_id = ? AND user_id = ?',
+            (quiz_id, user_id)
+        ).fetchone()
+    return json.loads(row[0]) if row else None
+
+def clear_quiz_state(quiz_id):
+    """Remove a finished/abandoned quiz's server-side state."""
+    if not quiz_id:
+        return
+    with sqlite3.connect(DATABASE) as conn:
+        conn.execute('DELETE FROM quiz_state WHERE quiz_id = ?', (quiz_id,))
+        conn.commit()
+
+def compare_spellings(correct_word, user_input):
+    """Return the correct word with correctly-placed chars lowercase and
+    wrong/missing chars UPPERCASE, via edit-distance alignment. Ported from the
+    CLI (word_quiz.py) so the web app shows the same teaching feedback."""
+    if not user_input:
+        return correct_word.upper() if correct_word else ""
+    if not correct_word:
+        return ""
+
+    s1 = correct_word.lower()
+    s2 = user_input.lower()
+    m, n = len(s1), len(s2)
+
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m + 1):
+        dp[i][0] = i
+    for j in range(n + 1):
+        dp[0][j] = j
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if s1[i - 1] == s2[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = 1 + min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+
+    alignment = []
+    i, j = m, n
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and s1[i - 1] == s2[j - 1]:
+            alignment.append((s1[i - 1], True)); i -= 1; j -= 1
+        elif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1:
+            alignment.append((s1[i - 1], False)); i -= 1; j -= 1
+        elif i > 0 and dp[i][j] == dp[i - 1][j] + 1:
+            alignment.append((s1[i - 1], False)); i -= 1
+        else:
+            j -= 1
+
+    return "".join(c if ok else c.upper() for c, ok in reversed(alignment))
 
 def build_word_pool(grades, word_type):
     """Build word pool based on grade levels and word type"""
@@ -234,6 +403,10 @@ def save_session_data(session_id, grades, word_type, total_words, correct_count,
     except Exception as e:
         print(f"Error saving session data: {e}")
 
+def normalize_email(email):
+    """Lowercase + strip so Kid@X.com and kid@x.com map to one account."""
+    return email.strip().lower() if email else email
+
 def hash_password(password):
     """Hash password using PBKDF2 (werkzeug)"""
     return generate_password_hash(password)
@@ -251,8 +424,9 @@ def verify_password(password, password_hash):
 def create_user(name, email, password=None, birth_year=None, birth_month=None, google_id=None, auth_provider='local'):
     """Create a new user account"""
     try:
+        email = normalize_email(email)
         password_hash = hash_password(password) if password else None
-        
+
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -300,6 +474,7 @@ def get_user_by_google_id(google_id):
 def get_user_by_email(email):
     """Get user by email address"""
     try:
+        email = normalize_email(email)
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -326,6 +501,7 @@ def get_user_by_email(email):
 def authenticate_user(email, password):
     """Authenticate user by email and password (local auth only)"""
     try:
+        email = normalize_email(email)
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -392,6 +568,7 @@ def login_required(f):
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute; 50 per hour", methods=["POST"])
 def login():
     """User login page"""
     if request.method == 'POST':
@@ -414,6 +591,7 @@ def login():
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("5 per minute; 20 per hour", methods=["POST"])
 def register():
     """User registration page"""
     if request.method == 'POST':
@@ -455,9 +633,16 @@ def register():
 @app.route('/logout')
 def logout():
     """User logout"""
+    clear_quiz_state(session.get('quiz_id'))
     session.clear()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Friendly response when rate limits are hit on auth routes."""
+    flash('Too many attempts. Please wait a minute and try again.', 'error')
+    return redirect(request.referrer or url_for('login'))
 
 # Google OAuth routes
 @app.route('/auth/google')
@@ -555,6 +740,8 @@ def profile():
         return redirect(url_for('logout'))
     
     # Get user's quiz statistics
+    streak = 0
+    badges = []
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
@@ -563,25 +750,126 @@ def profile():
                 FROM sessions WHERE user_id = ?
             ''', (session['user_id'],))
             stats = cursor.fetchone()
-            
+
             user_stats = {
                 'total_quizzes': stats[0] or 0,
                 'average_score': round(stats[1] or 0, 1),
                 'total_words': stats[2] or 0,
                 'total_correct': stats[3] or 0
             }
+
+            # Daily streak from distinct quiz dates
+            rows = conn.execute('SELECT created_at FROM sessions WHERE user_id = ?',
+                                (session['user_id'],)).fetchall()
+        dates = []
+        for (ts,) in rows:
+            try:
+                dates.append(datetime.fromisoformat(ts.replace('Z', '')).date())
+            except (ValueError, AttributeError):
+                pass
+        streak = compute_streak(dates)
+
+        # Simple achievement badges
+        tq = user_stats['total_quizzes']
+        if tq >= 1: badges.append(('🎯', 'First Quiz'))
+        if tq >= 10: badges.append(('🔟', '10 Quizzes'))
+        if tq >= 50: badges.append(('🏅', '50 Quizzes'))
+        if user_stats['average_score'] >= 90 and tq >= 5:
+            badges.append(('🌟', 'Spelling Star'))
+        if streak >= 3: badges.append(('🔥', f'{streak}-Day Streak'))
     except Exception as e:
         print(f"Error getting user stats: {e}")
         user_stats = {'total_quizzes': 0, 'average_score': 0, 'total_words': 0, 'total_correct': 0}
-    
-    return render_template('profile.html', user=user, stats=user_stats)
+
+    return render_template('profile.html', user=user, stats=user_stats,
+                           streak=streak, badges=badges)
+
+@app.route('/profile/edit', methods=['GET', 'POST'])
+@login_required
+def profile_edit():
+    """Edit display name and (for local accounts) change password."""
+    user = get_user_by_id(session['user_id'])
+    if not user:
+        flash('User not found.', 'error')
+        return redirect(url_for('logout'))
+
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        current_pw = request.form.get('current_password') or ''
+        new_pw = request.form.get('new_password') or ''
+        confirm_pw = request.form.get('confirm_password') or ''
+
+        if not name:
+            flash('Name cannot be empty.', 'error')
+            return render_template('profile_edit.html', user=user)
+
+        with sqlite3.connect(DATABASE) as conn:
+            conn.execute('UPDATE users SET name = ? WHERE id = ?', (name, user['id']))
+            conn.commit()
+        session['user_name'] = name
+
+        # Optional password change (local accounts only)
+        if new_pw or confirm_pw or current_pw:
+            if user['auth_provider'] != 'local':
+                flash('Password change is not available for Google accounts.', 'error')
+            elif len(new_pw) < 6:
+                flash('New password must be at least 6 characters.', 'error')
+            elif new_pw != confirm_pw:
+                flash('New passwords do not match.', 'error')
+            elif not authenticate_user(user['email'], current_pw):
+                flash('Current password is incorrect.', 'error')
+            else:
+                with sqlite3.connect(DATABASE) as conn:
+                    conn.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                                 (hash_password(new_pw), user['id']))
+                    conn.commit()
+                flash('Profile and password updated.', 'success')
+                return redirect(url_for('profile'))
+
+        flash('Profile updated.', 'success')
+        return redirect(url_for('profile'))
+
+    return render_template('profile_edit.html', user=user)
+
+@app.route('/practice_missed')
+@login_required
+def practice_missed():
+    """Start a quiz built from the user's historically misspelled words."""
+    misses = get_user_misses(session['user_id'])
+    words = [w for w, _ in misses]
+    if not words:
+        flash('No missed words yet — take a quiz first!', 'info')
+        return redirect(url_for('setup'))
+
+    selected_words = words[:20]
+    config = {
+        'grades': ['missed'],
+        'word_type': 'r',
+        'selected_words': selected_words,
+        'current_word_index': 0,
+        'correct_answers': [],
+        'incorrect_answers': [],
+        'start_time': datetime.now().isoformat()
+    }
+    clear_quiz_state(session.get('quiz_id'))
+    quiz_id = secrets.token_urlsafe(24)
+    session['quiz_id'] = quiz_id
+    save_quiz_state(quiz_id, session['user_id'], config)
+    return redirect(url_for('quiz'))
 
 @app.route('/')
 def index():
     """Main page"""
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return render_template('index.html', user_name=session.get('user_name'))
+    return render_template('index.html',
+                           user_name=session.get('user_name'),
+                           word_count=len(word_dictionary))
+
+@app.route('/privacy')
+def privacy():
+    """Privacy policy (COPPA-conscious: explains what kids' data is stored)."""
+    return render_template('privacy.html')
 
 @app.route('/setup', methods=['GET', 'POST'])
 @login_required
@@ -618,9 +906,10 @@ def setup():
             
             # Select random words for quiz
             selected_words = random.sample(available_words, num_words)
-            
-            # Store quiz configuration in session
-            session['quiz_config'] = {
+
+            # Store quiz configuration server-side; the cookie only holds an
+            # opaque token, so the answer list never reaches the client.
+            config = {
                 'grades': grades,
                 'word_type': word_type,
                 'selected_words': selected_words,
@@ -629,24 +918,35 @@ def setup():
                 'incorrect_answers': [],
                 'start_time': datetime.now().isoformat()
             }
-            
+            clear_quiz_state(session.get('quiz_id'))
+            quiz_id = secrets.token_urlsafe(24)
+            session['quiz_id'] = quiz_id
+            save_quiz_state(quiz_id, session['user_id'], config)
+
+            # Remember these choices for next time
+            save_user_prefs(session['user_id'], {
+                'grades': grades, 'word_type': word_type, 'num_words': num_words
+            })
+
             return redirect(url_for('quiz'))
-            
+
         except Exception as e:
             return jsonify({'error': str(e)}), 400
-    
-    return render_template('setup.html')
+
+    # Preselect the user's last-used settings (falls back to defaults in the template)
+    prefs = load_user_prefs(session['user_id']) or {}
+    return render_template('setup.html', prefs=prefs)
 
 @app.route('/quiz')
 @login_required
 def quiz():
     """Quiz page"""
-    if 'quiz_config' not in session:
+    config = load_quiz_state(session.get('quiz_id'), session['user_id'])
+    if not config:
         return redirect(url_for('setup'))
-    
-    config = session['quiz_config']
+
     current_index = config['current_word_index']
-    
+
     if current_index >= len(config['selected_words']):
         return redirect(url_for('results'))
     
@@ -663,41 +963,45 @@ def quiz():
 @login_required
 def submit_answer():
     """Handle quiz answer submission"""
-    if 'quiz_config' not in session:
+    quiz_id = session.get('quiz_id')
+    config = load_quiz_state(quiz_id, session['user_id'])
+    if not config:
         return jsonify({'error': 'No active quiz session'}), 400
-    
-    config = session['quiz_config']
+
     current_index = config['current_word_index']
-    
+
     if current_index >= len(config['selected_words']):
         return jsonify({'error': 'Quiz already completed'}), 400
-    
+
     current_word = config['selected_words'][current_index]
-    user_answer = request.json.get('answer', '').strip().lower()
-    
+    user_answer = (request.json.get('answer') or '').strip().lower()
+
     # Check answer
     is_correct = user_answer == current_word.lower()
-    
+
+    # Character-by-character diff (lowercase = right, UPPERCASE = wrong/missing)
+    diff = None if is_correct else compare_spellings(current_word, user_answer)
+
     if is_correct:
         config['correct_answers'].append(current_word)
     else:
         config['incorrect_answers'].append({
             'word': current_word,
             'user_answer': user_answer,
-            'correct_answer': current_word
+            'correct_answer': current_word,
+            'diff': diff
         })
-    
-    # Move to next word
+
+    # Move to next word and persist server-side
     config['current_word_index'] += 1
-    session['quiz_config'] = config
-    
+
     # Check if quiz is complete
     is_complete = config['current_word_index'] >= len(config['selected_words'])
-    
+
     if is_complete:
-        # Save session data
+        # Save session data, then drop the server-side quiz state
         save_session_data(
-            session.get('session_id', 'anonymous'),
+            quiz_id,
             config['grades'],
             config['word_type'],
             len(config['selected_words']),
@@ -705,11 +1009,15 @@ def submit_answer():
             len(config['incorrect_answers']),
             [item['word'] for item in config['incorrect_answers']]
         )
-    
+        save_quiz_state(quiz_id, session['user_id'], config)
+    else:
+        save_quiz_state(quiz_id, session['user_id'], config)
+
     response_data = {
         'correct': is_correct,
         'correct_answer': current_word,
         'definition': word_dictionary[current_word]['definition'],
+        'diff': diff,
         'is_complete': is_complete
     }
     
@@ -729,22 +1037,24 @@ def submit_answer():
 @login_required
 def results():
     """Results page"""
-    if 'quiz_config' not in session:
+    config = load_quiz_state(session.get('quiz_id'), session['user_id'])
+    if not config:
         return redirect(url_for('setup'))
-    
-    config = session['quiz_config']
+
     total_words = len(config['selected_words'])
     correct_count = len(config['correct_answers'])
     incorrect_count = len(config['incorrect_answers'])
     percentage = (correct_count / total_words * 100) if total_words > 0 else 0
-    
+
     return render_template('results.html',
                          total_words=total_words,
                          correct_count=correct_count,
                          incorrect_count=incorrect_count,
                          percentage=percentage,
                          incorrect_answers=config['incorrect_answers'],
-                         grades=config['grades'])
+                         grades=config['grades'],
+                         completed_at=datetime.now().strftime('%B %-d, %Y, %-I:%M %p') if os.name != 'nt' else datetime.now().strftime('%B %d, %Y, %I:%M %p'),
+                         word_dictionary=word_dictionary)
 
 @app.route('/statistics')
 @login_required
@@ -773,14 +1083,31 @@ def statistics():
                 WHERE user_id = ?
             ''', (session['user_id'],)).fetchone()
             
+        # Top misspelled words for this user (with definitions)
+        top_missed = [
+            {'word': w, 'count': c, 'definition': word_dictionary[w]['definition']}
+            for w, c in get_user_misses(session['user_id'], limit=10)
+        ]
+
         return render_template('statistics.html',
                              recent_sessions=recent_sessions,
-                             overall_stats=overall_stats)
+                             overall_stats=overall_stats,
+                             top_missed=top_missed)
     except Exception as e:
         return render_template('statistics.html',
                              recent_sessions=[],
                              overall_stats=None,
+                             top_missed=[],
                              error=str(e))
+
+@app.route('/quiz/quit', methods=['POST'])
+@login_required
+def quit_quiz():
+    """Abandon the current quiz and clear its server-side state."""
+    clear_quiz_state(session.get('quiz_id'))
+    session.pop('quiz_id', None)
+    flash('Quiz ended.', 'info')
+    return redirect(url_for('setup'))
 
 @app.route('/api/word_data/<word>')
 def get_word_data(word):
@@ -809,20 +1136,13 @@ def get_available_words():
                     pass
         
         word_type = request.args.get('word_type', 'r')
-        
-        # Debug logging
-        print(f"API DEBUG: grades={grades}, word_type={word_type}")
-        
         available_words = build_word_pool(grades, word_type)
-        
-        print(f"API DEBUG: Found {len(available_words)} words")
-        
+
         return jsonify({
             'count': len(available_words),
             'words': available_words[:50] if len(available_words) > 50 else available_words
         })
     except Exception as e:
-        print(f"API ERROR: {e}")
         return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':

@@ -22,39 +22,78 @@
         <p class="mb-0">{{ definition }}</p>
     </div>
     
+    <!-- Autoplay-blocked prompt (shown if the browser blocks speech before interaction) -->
+    <div id="tapToHear" class="alert alert-warning text-center" style="display:none;">
+        <button class="btn btn-warning btn-lg" id="tapToHearBtn" type="button">
+            <i class="fas fa-volume-up"></i> Tap to hear your word
+        </button>
+        <div><small>Your browser needs a tap before it can play audio.</small></div>
+    </div>
+
     <!-- Audio Controls -->
     <div class="text-center mb-4">
-        <button class="btn btn-outline-primary btn-lg" id="playWord" type="button">
+        <button class="btn btn-outline-primary btn-lg" id="playWord" type="button" aria-label="Play the word aloud">
             <i class="fas fa-play"></i> Play Word
         </button>
-        <button class="btn btn-outline-secondary" id="playAgain" type="button" style="display: none;">
-            <i class="fas fa-redo"></i> Play Again
+        <button class="btn btn-outline-secondary" id="spellOut" type="button" aria-label="Hear the word spelled letter by letter">
+            <i class="fas fa-spell-check"></i> Spell It Out
+        </button>
+        <button class="btn btn-link btn-sm text-decoration-none" id="voiceToggle" type="button" aria-expanded="false" aria-controls="voiceSettings">
+            <i class="fas fa-sliders-h"></i> Voice
         </button>
     </div>
-    
+
+    <!-- Voice / rate settings -->
+    <div id="voiceSettings" class="row justify-content-center mb-3" style="display:none;">
+        <div class="col-md-5 mb-2">
+            <label for="voiceSelect" class="form-label small">Voice</label>
+            <select id="voiceSelect" class="form-select form-select-sm"></select>
+        </div>
+        <div class="col-md-4 mb-2">
+            <label for="rateRange" class="form-label small">Speed: <span id="rateValue">0.8</span>×</label>
+            <input type="range" class="form-range" id="rateRange" min="0.5" max="1.2" step="0.1" value="0.8">
+        </div>
+    </div>
+
     <!-- Answer Input -->
     <div class="text-center">
-        <input type="text" 
-               class="form-control answer-input" 
-               id="userAnswer" 
+        <label for="userAnswer" class="visually-hidden">Type the spelling of the word you heard</label>
+        <input type="text"
+               class="form-control answer-input"
+               id="userAnswer"
                placeholder="Type the spelling here..."
                autocomplete="off"
-               spellcheck="false">
-        
+               autocapitalize="off"
+               spellcheck="false"
+               aria-describedby="feedback">
+
         <button class="btn btn-primary btn-lg mt-3" id="submitAnswer" type="button">
             <i class="fas fa-check"></i> Submit Answer
         </button>
     </div>
-    
-    <!-- Feedback Area -->
-    <div id="feedback" class="text-center mt-4" style="display: none;">
+
+    <!-- Feedback Area (announced to screen readers) -->
+    <div id="feedback" class="text-center mt-4" style="display: none;" aria-live="polite" role="status">
         <div id="feedbackContent"></div>
+        <button class="btn btn-outline-secondary mt-3" id="spellOutFeedback" type="button">
+            <i class="fas fa-spell-check"></i> Spell It Out
+        </button>
         <button class="btn btn-success btn-lg mt-3" id="nextWord" type="button" style="display: none;">
             <i class="fas fa-arrow-right"></i> Next Word
         </button>
         <button class="btn btn-primary btn-lg mt-3" id="viewResults" type="button" style="display: none;">
             <i class="fas fa-trophy"></i> View Results
         </button>
+    </div>
+
+    <!-- Quit quiz -->
+    <div class="text-center mt-4">
+        <form method="POST" action="{{ url_for('quit_quiz') }}" onsubmit="return confirm('End this quiz and return to setup?');" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-link btn-sm text-danger text-decoration-none">
+                <i class="fas fa-times"></i> Quit quiz
+            </button>
+        </form>
     </div>
 </div>
 
@@ -72,62 +111,104 @@ $(document).ready(function() {
     let hasPlayed = false;
     window.countdownInterval = null;
     window.lastResponse = null;
-    
-    // Text-to-speech function
-    function speakWord(text) {
-        if ('speechSynthesis' in window) {
-            // Cancel any ongoing speech
-            window.speechSynthesis.cancel();
-            
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.8;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            
-            // Try to use a good voice
-            const voices = window.speechSynthesis.getVoices();
-            const englishVoices = voices.filter(voice => 
-                voice.lang.startsWith('en-') && 
-                (voice.name.includes('Female') || voice.name.includes('Male'))
-            );
-            
-            if (englishVoices.length > 0) {
-                utterance.voice = englishVoices[0];
-            }
-            
-            window.speechSynthesis.speak(utterance);
-            
-            utterance.onend = function() {
-                $('#playWord').html('<i class="fas fa-play"></i> Play Word');
-                $('#playAgain').show();
-                hasPlayed = true;
-            };
-            
-            utterance.onstart = function() {
-                $('#playWord').html('<i class="fas fa-volume-up"></i> Playing...');
-            };
-        } else {
-            alert('Text-to-speech is not supported in your browser.');
+
+    const supportsTTS = 'speechSynthesis' in window;
+    let voices = [];
+
+    // Persisted voice preferences
+    function getRate() { return parseFloat(localStorage.getItem('spellaroo_rate') || '0.8'); }
+    function getVoiceURI() { return localStorage.getItem('spellaroo_voice') || ''; }
+
+    function pickVoice() {
+        const uri = getVoiceURI();
+        if (uri) {
+            const chosen = voices.find(v => v.voiceURI === uri);
+            if (chosen) return chosen;
+        }
+        return voices.find(v => v.lang && v.lang.startsWith('en-')) || voices[0] || null;
+    }
+
+    function populateVoiceList() {
+        voices = window.speechSynthesis.getVoices().filter(v => v.lang && v.lang.startsWith('en'));
+        const $sel = $('#voiceSelect').empty();
+        voices.forEach(v => $sel.append(`<option value="${v.voiceURI}">${v.name} (${v.lang})</option>`));
+        if (getVoiceURI()) $sel.val(getVoiceURI());
+    }
+
+    // Speak text; onBlocked fires if playback doesn't start (autoplay policy)
+    function speak(text, opts) {
+        opts = opts || {};
+        if (!supportsTTS) { alert('Text-to-speech is not supported in your browser.'); return; }
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = opts.rate || getRate();
+        u.pitch = 1.0;
+        u.volume = 1.0;
+        const v = pickVoice();
+        if (v) u.voice = v;
+
+        let started = false;
+        u.onstart = function () { started = true; if (opts.onstart) opts.onstart(); };
+        u.onend = function () { if (opts.onend) opts.onend(); };
+        window.speechSynthesis.speak(u);
+
+        // If nothing starts shortly, assume the browser blocked autoplay
+        if (opts.onBlocked) {
+            setTimeout(function () { if (!started) opts.onBlocked(); }, 500);
         }
     }
-    
-    // Load voices
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.onvoiceschanged = function() {
-            // Voices loaded
-        };
+
+    function speakWord(text, opts) {
+        opts = opts || {};
+        $('#playWord').html('<i class="fas fa-volume-up"></i> Playing...');
+        speak(text, {
+            onstart: function () { $('#tapToHear').hide(); },
+            onend: function () { $('#playWord').html('<i class="fas fa-play"></i> Play Word'); hasPlayed = true; },
+            onBlocked: opts.onBlocked
+        });
     }
-    
-    // Play word button
-    $('#playWord, #playAgain').click(function() {
-        speakWord(window.currentWord);
+
+    // Spell the word letter-by-letter (commas make the voice pause between letters)
+    function spellOut(text) {
+        speak(text.split('').join(', '), { rate: Math.min(getRate(), 0.7) });
+    }
+
+    // Attempt autoplay; if blocked, reveal the tap-to-hear prompt
+    function autoPlay() {
+        if (!supportsTTS) return;
+        speakWord(window.currentWord, { onBlocked: function () { $('#tapToHear').show(); } });
+    }
+
+    if (supportsTTS) {
+        populateVoiceList();
+        window.speechSynthesis.onvoiceschanged = populateVoiceList;
+    }
+
+    // Initialize rate control
+    $('#rateRange').val(getRate());
+    $('#rateValue').text(getRate());
+    $('#rateRange').on('input', function () {
+        localStorage.setItem('spellaroo_rate', $(this).val());
+        $('#rateValue').text($(this).val());
     });
-    
+    $('#voiceSelect').on('change', function () {
+        localStorage.setItem('spellaroo_voice', $(this).val());
+    });
+    $('#voiceToggle').click(function () {
+        const $s = $('#voiceSettings');
+        $s.toggle();
+        $(this).attr('aria-expanded', $s.is(':visible'));
+    });
+
+    // Buttons
+    $('#playWord').click(function () { speakWord(window.currentWord); });
+    $('#tapToHearBtn').click(function () { $('#tapToHear').hide(); speakWord(window.currentWord); });
+    $('#spellOut').click(function () { spellOut(window.currentWord); });
+    $('#spellOutFeedback').click(function () { spellOut(window.currentWord); });
+
     // Auto-play word on page load
-    setTimeout(function() {
-        speakWord(window.currentWord);
-    }, 500);
-    
+    setTimeout(autoPlay, 500);
+
     // Handle Enter key in input
     $('#userAnswer').keypress(function(e) {
         if (e.which === 13) { // Enter key
@@ -181,11 +262,16 @@ $(document).ready(function() {
                 </div>
             `;
         } else {
+            const diffHtml = response.diff
+                ? `<p class="mb-1">Where it went wrong: <span class="spell-diff">${response.diff}</span></p>
+                   <p class="mb-2"><small class="text-muted">lowercase = correct, UPPERCASE = wrong or missing</small></p>`
+                : '';
             feedbackHtml = `
                 <div class="alert alert-danger">
                     <h4><i class="fas fa-times-circle"></i> Not quite right</h4>
-                    <p>You spelled: "<strong>${$('#userAnswer').val()}</strong>"</p>
-                    <p>Correct spelling: "<strong>${response.correct_answer}</strong>"</p>
+                    <p class="mb-1">You spelled: "<strong>${$('#userAnswer').val()}</strong>"</p>
+                    <p class="mb-1">Correct spelling: "<strong>${response.correct_answer}</strong>"</p>
+                    ${diffHtml}
                     <p class="mb-0"><em>${response.definition}</em></p>
                 </div>
             `;

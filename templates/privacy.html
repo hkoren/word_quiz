@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy - Spellaroo{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <h2 class="mb-4"><i class="fas fa-shield-halved"></i> Privacy Policy</h2>
+    <p class="text-muted">Last updated {{ current_year }}</p>
+
+    <p>Spellaroo is a spelling-practice app for learners from kindergarten
+    through grade 12. We keep data collection to the minimum needed to run the
+    quiz and track progress.</p>
+
+    <h5 class="mt-4">What we store</h5>
+    <ul>
+        <li><strong>Account info:</strong> your name, email address, and birth
+        month/year (used only to tailor grade-level suggestions).</li>
+        <li><strong>Passwords:</strong> stored only as a salted PBKDF2 hash — we
+        never keep your plain-text password.</li>
+        <li><strong>Quiz activity:</strong> the quizzes you take, your scores,
+        and which words you missed, so we can show your progress.</li>
+    </ul>
+
+    <h5 class="mt-4">What we don't do</h5>
+    <ul>
+        <li>We do not sell or share personal information.</li>
+        <li>We do not show third-party advertising.</li>
+        <li>We do not track you across other websites.</li>
+    </ul>
+
+    <h5 class="mt-4">Children's privacy</h5>
+    <p>Spellaroo is intended to be set up and supervised by a parent, guardian,
+    or teacher. If you believe a child has registered without appropriate
+    consent, or you want a child's data removed, contact us and we will delete
+    the account and its associated data.</p>
+
+    <h5 class="mt-4">Data removal</h5>
+    <p>You can request deletion of your account and all associated quiz data at
+    any time by contacting the site administrator.</p>
+
+    <h5 class="mt-4">Contact</h5>
+    <p>Questions about privacy? Email
+    <a href="mailto:henry@imatest.com">henry@imatest.com</a>.</p>
+
+    <div class="text-center mt-4">
+        <a href="{{ url_for('index') if logged_in else url_for('login') }}" class="btn btn-primary">
+            <i class="fas fa-home me-2"></i>Back
+        </a>
+    </div>
+</div>
+{% endblock %}

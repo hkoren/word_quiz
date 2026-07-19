@@ -1,5 +1,36 @@
 /* Custom CSS for Spellaroo */
 
+/* Character-by-character spelling diff (lowercase = correct, UPPERCASE = wrong/missing) */
+.spell-diff {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 1.5rem;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: #212529;
+    background: #fff3cd;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+    .spell-diff { color: #f7fafc; background: #4a5568; }
+}
+
+/* Kangaroo mascot */
+.brand-roo { font-size: 1.3rem; }
+.hero-roo {
+    font-size: 4rem;
+    line-height: 1;
+    display: inline-block;
+    animation: hop 2.2s ease-in-out infinite;
+}
+@keyframes hop {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-12px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .hero-roo { animation: none; }
+}
+
 .quiz-container {
     animation: fadeIn 0.5s ease-in;
 }

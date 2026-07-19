@@ -16,11 +16,30 @@
                 </div>
             </div>
             <div class="col-md-4 text-end">
+                <a href="{{ url_for('profile_edit') }}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-pen me-2"></i>Edit
+                </a>
                 <a href="{{ url_for('logout') }}" class="btn btn-outline-danger">
                     <i class="fas fa-sign-out-alt me-2"></i>Logout
                 </a>
             </div>
         </div>
+
+        {% if badges %}
+        <div class="stats-card mb-4">
+            <h5 class="mb-3"><i class="fas fa-award me-2"></i>Achievements
+                {% if streak %}<span class="badge bg-danger ms-2">🔥 {{ streak }}-day streak</span>{% endif %}
+            </h5>
+            <div class="d-flex flex-wrap gap-3">
+                {% for icon, label in badges %}
+                <div class="text-center" style="min-width:90px;">
+                    <div style="font-size:2rem;">{{ icon }}</div>
+                    <small>{{ label }}</small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         <div class="row">
             <div class="col-md-6">
