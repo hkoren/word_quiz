@@ -68,13 +68,17 @@
                 Hover a word for details.
             </small>
         </p>
-        <div class="word-cloud">
-            {% for t in word_cloud %}
-            <span class="cloud-word"
-                  style="font-size: {{ t.size }}rem; color: {{ t.color }};"
-                  title="{{ t.word }} — {% if t.attempts %}{{ t.correct }} right / {{ t.incorrect }} wrong ({{ (t.ratio * 100) | round }}%){% else %}not attempted yet{% endif %}">{{ t.word }}</span>
-            {% endfor %}
+        <!-- openTagCloud renders here; the spans below are a no-JS fallback it replaces -->
+        <div id="wordCloud" class="word-cloud-host">
+            <div class="word-cloud">
+                {% for t in word_cloud %}
+                <span class="cloud-word"
+                      style="font-size: {{ t.size }}rem; color: {{ t.color }};"
+                      title="{{ t.title }}">{{ t.word }}</span>
+                {% endfor %}
+            </div>
         </div>
+        <script id="wordCloudData" type="application/json">{{ word_cloud | tojson }}</script>
         <div class="text-center mt-3">
             <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="fas fa-shuffle me-1"></i>Shuffle words
@@ -109,4 +113,22 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if word_cloud %}
+<script src="{{ url_for('static', filename='opentagcloud.vanilla.js') }}"></script>
+<script>
+$(function () {
+    try {
+        var host = document.getElementById('wordCloud');
+        var items = JSON.parse(document.getElementById('wordCloudData').textContent);
+        if (host && window.openTagCloud && items && items.length) {
+            host.innerHTML = '';                    // drop the no-JS fallback
+            openTagCloud.mount(host, items, { minPx: 12, maxPx: 42 });
+        }
+    } catch (e) { /* keep the server-rendered fallback on any error */ }
+});
+</script>
+{% endif %}
 {% endblock %}

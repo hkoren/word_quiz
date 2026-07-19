@@ -377,8 +377,14 @@ def build_word_cloud(user_id, n=100):
             color = f'hsl({hue}, 68%, 42%)'
         # Size grows with practice so mastered/struggled words stand out
         size = round(min(2.6, 1.0 + attempts * 0.18) + random.uniform(0, 0.25), 2)
-        cloud.append({'word': w, 'correct': correct, 'incorrect': incorrect,
-                      'attempts': attempts, 'ratio': ratio, 'color': color, 'size': size})
+        if attempts:
+            title = f"{w} — {correct} right / {incorrect} wrong ({round(ratio * 100)}%)"
+        else:
+            title = f"{w} — not attempted yet"
+        cloud.append({'word': w, 'label': w, 'correct': correct, 'incorrect': incorrect,
+                      'attempts': attempts, 'ratio': ratio, 'color': color, 'size': size,
+                      # openTagCloud fields: weight drives font size, title = tooltip
+                      'weight': attempts + 1, 'title': title})
     random.shuffle(cloud)
     return cloud
 

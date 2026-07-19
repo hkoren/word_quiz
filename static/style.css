@@ -16,6 +16,13 @@
 }
 
 /* Word cloud (home page) */
+.word-cloud-host {
+    height: 360px;
+    --otc-hover-color: #495057;
+}
+@media (max-width: 768px) {
+    .word-cloud-host { height: 300px; }
+}
 .word-cloud {
     display: flex;
     flex-wrap: wrap;
