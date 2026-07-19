@@ -859,9 +859,9 @@ def practice_missed():
 
 @app.route('/')
 def index():
-    """Main page"""
+    """Main page: public landing for visitors, dashboard for logged-in users."""
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        return render_template('landing.html', word_count=len(word_dictionary))
     return render_template('index.html',
                            user_name=session.get('user_name'),
                            word_count=len(word_dictionary))

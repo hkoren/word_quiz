@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Spellaroo — Hop into Spelling Practice{% endblock %}
+
+{% block content %}
+<div class="quiz-container text-center">
+    <!-- Hero -->
+    <div class="mb-4">
+        <div class="hero-roo mb-2" aria-hidden="true">🦘</div>
+        <h1 class="display-4 mb-2">Spellaroo</h1>
+        <p class="lead mb-1">Hop into spelling practice — kindergarten through grade 12.</p>
+        <p class="text-muted">Hear the word, type the spelling, learn from every mistake.</p>
+    </div>
+
+    <div class="d-grid gap-3 col-md-6 mx-auto mb-5">
+        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">
+            <i class="fas fa-user-plus"></i> Create a Free Account
+        </a>
+        <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-lg">
+            <i class="fas fa-sign-in-alt"></i> Sign In
+        </a>
+    </div>
+
+    <!-- Feature cards -->
+    <div class="row text-center mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="stats-card h-100">
+                <i class="fas fa-volume-up fa-3x text-primary mb-3"></i>
+                <h4>Hear Every Word</h4>
+                <p class="mb-0">Words and definitions are read aloud — with adjustable voice
+                and speaking speed. Replay or hear it spelled letter-by-letter anytime.</p>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="stats-card h-100">
+                <i class="fas fa-spell-check fa-3x text-success mb-3"></i>
+                <h4>Learn From Mistakes</h4>
+                <p class="mb-0">Missed a word? Spellaroo shows exactly <em>which letters</em>
+                went wrong with a character-by-character comparison.</p>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="stats-card h-100">
+                <i class="fas fa-book fa-3x text-info mb-3"></i>
+                <h4>{{ word_count }} Words, K–12</h4>
+                <p class="mb-0">Sight words and vocabulary for every grade from kindergarten
+                through high school, each with a kid-friendly definition.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row text-center mb-5">
+        <div class="col-md-4 mb-3">
+            <div class="stats-card h-100">
+                <i class="fas fa-chart-line fa-3x text-warning mb-3"></i>
+                <h4>Track Progress</h4>
+                <p class="mb-0">Scores, accuracy over time, and your personal
+                most-missed words — so practice goes where it counts.</p>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="stats-card h-100">
+                <i class="fas fa-redo-alt fa-3x text-danger mb-3"></i>
+                <h4>Practice What You Miss</h4>
+                <p class="mb-0">One tap builds a quiz from the words you've
+                misspelled before, until they stick.</p>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="stats-card h-100">
+                <i class="fas fa-award fa-3x text-primary mb-3"></i>
+                <h4>Streaks &amp; Badges</h4>
+                <p class="mb-0">Daily streaks and achievement badges keep young
+                spellers motivated to come back.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- How it works -->
+    <div class="mb-4">
+        <h5>How it works:</h5>
+        <div class="row text-start">
+            <div class="col-md-6">
+                <ol class="list-group list-group-numbered">
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Pick grade levels:</strong> kindergarten through grade 12, mix and match
+                    </li>
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Choose word type:</strong> sight words, vocabulary, or a mix
+                    </li>
+                </ol>
+            </div>
+            <div class="col-md-6">
+                <ol class="list-group list-group-numbered" start="3">
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Listen and spell:</strong> type what you hear
+                    </li>
+                    <li class="list-group-item border-0 bg-transparent">
+                        <strong>Improve:</strong> see exactly what to fix and watch your scores climb
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-muted">
+        Free to use · No ads · <a href="{{ url_for('privacy') }}">Kid-friendly privacy</a> ·
+        Works on desktop, tablet, and phone
+    </p>
+
+    <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg mt-2">
+        <i class="fas fa-play"></i> Get Started
+    </a>
+</div>
+{% endblock %}
