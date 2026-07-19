@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block title %}Admin · {{ u.name }} - Spellaroo{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <h2 class="mb-0"><i class="fas fa-user-cog me-2"></i>{{ u.name }}</h2>
+        <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i>All Users
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- Account info -->
+        <div class="col-lg-6 mb-3">
+            <div class="stats-card h-100">
+                <h5 class="mb-3"><i class="fas fa-id-card me-2"></i>Account</h5>
+                <p class="mb-1"><strong>Email:</strong> {{ u.email }}</p>
+                <p class="mb-1"><strong>Provider:</strong>
+                    {% if u.auth_provider == 'google' %}<i class="fab fa-google text-danger"></i> Google{% else %}<i class="fas fa-envelope text-primary"></i> Local{% endif %}
+                </p>
+                <p class="mb-1"><strong>Born:</strong> {{ u.birth_month or '?' }}/{{ u.birth_year or '?' }}</p>
+                <p class="mb-1"><strong>Status:</strong>
+                    {% if flags and (flags['is_active'] is none or flags['is_active']) %}
+                        <span class="badge bg-success">active</span>
+                    {% else %}
+                        <span class="badge bg-secondary">deactivated</span>
+                    {% endif %}
+                    {% if flags and flags['is_admin'] %}<span class="badge bg-primary">admin</span>{% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="col-lg-6 mb-3">
+            <div class="stats-card h-100">
+                <h5 class="mb-3"><i class="fas fa-chart-bar me-2"></i>Quiz Stats</h5>
+                <div class="row text-center">
+                    <div class="col-3"><div class="h4 text-primary">{{ stats['total_quizzes'] or 0 }}</div><small>Quizzes</small></div>
+                    <div class="col-3"><div class="h4 text-success">{{ "%.0f"|format(stats['avg_score'] or 0) }}%</div><small>Avg</small></div>
+                    <div class="col-3"><div class="h4 text-info">{{ stats['total_words'] or 0 }}</div><small>Words</small></div>
+                    <div class="col-3"><div class="h4 text-warning">{{ stats['total_correct'] or 0 }}</div><small>Correct</small></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin actions -->
+    <div class="stats-card mb-4">
+        <h5 class="mb-3"><i class="fas fa-tools me-2"></i>Actions</h5>
+        <div class="d-flex flex-wrap gap-2">
+            <form method="POST" action="{{ url_for('admin_toggle_active', user_id=u.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if flags and (flags['is_active'] is none or flags['is_active']) %}
+                <button class="btn btn-outline-warning" onclick="return confirm('Deactivate this account? They will not be able to log in.');">
+                    <i class="fas fa-user-slash me-1"></i>Deactivate
+                </button>
+                {% else %}
+                <button class="btn btn-outline-success">
+                    <i class="fas fa-user-check me-1"></i>Reactivate
+                </button>
+                {% endif %}
+            </form>
+
+            <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if flags and flags['is_admin'] %}
+                <button class="btn btn-outline-secondary" onclick="return confirm('Revoke admin from this user?');">
+                    <i class="fas fa-user-minus me-1"></i>Revoke Admin
+                </button>
+                {% else %}
+                <button class="btn btn-outline-primary" onclick="return confirm('Grant admin to this user?');">
+                    <i class="fas fa-user-shield me-1"></i>Make Admin
+                </button>
+                {% endif %}
+            </form>
+
+            {% if u.auth_provider == 'local' %}
+            <form method="POST" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-outline-info" onclick="return confirm('Set a temporary password for this user? It will be shown once.');">
+                    <i class="fas fa-key me-1"></i>Reset Password
+                </button>
+            </form>
+            {% endif %}
+
+            <a href="{{ url_for('admin_export_user', user_id=u.id) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-file-export me-1"></i>Export Data
+            </a>
+
+            <form method="POST" action="{{ url_for('admin_delete_user', user_id=u.id) }}" class="d-inline ms-auto">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-danger" onclick="return confirm('PERMANENTLY delete {{ u.email }} and ALL their data? This cannot be undone.');">
+                    <i class="fas fa-trash me-1"></i>Delete User
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Most-missed words -->
+    {% if misses %}
+    <div class="mb-4">
+        <h5><i class="fas fa-triangle-exclamation me-2"></i>Most-Missed Words</h5>
+        <p>
+            {% for word, count in misses %}
+            <span class="badge bg-danger me-1 mb-1">{{ word }} ×{{ count }}</span>
+            {% endfor %}
+        </p>
+    </div>
+    {% endif %}
+
+    <!-- Recent sessions -->
+    <h5><i class="fas fa-history me-2"></i>Recent Sessions</h5>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead><tr><th>Date</th><th>Grades</th><th>Words</th><th>Correct</th><th>Score</th></tr></thead>
+            <tbody>
+                {% for s in recent %}
+                <tr>
+                    <td><small>{{ (s['created_at'] or '')[:16] }}</small></td>
+                    <td>{{ (s['grades'] | from_json) | join(', ') }}</td>
+                    <td>{{ s['total_words'] }}</td>
+                    <td>{{ s['correct_count'] }}</td>
+                    <td>{{ "%.0f"|format(s['percentage'] or 0) }}%</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" class="text-center text-muted py-3">No quizzes yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

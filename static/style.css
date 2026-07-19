@@ -189,61 +189,142 @@
 /* Responsive improvements */
 @media (max-width: 768px) {
     .quiz-container {
-        margin: 15px;
-        padding: 20px;
+        margin: 12px 8px;
+        padding: 18px 14px;
     }
-    
+
     .word-display {
         font-size: 2rem;
     }
-    
+
     .answer-input {
         font-size: 1.5rem;
+        padding: 12px;
+    }
+
+    .hero-roo {
+        font-size: 3rem;
+    }
+
+    .display-4 {
+        font-size: 2.2rem;
+    }
+
+    .spell-diff {
+        font-size: 1.2rem;
+        letter-spacing: 1px;
+        word-break: break-all;
+    }
+
+    /* Comfortable tap targets */
+    .btn {
+        min-height: 44px;
+    }
+
+    .grade-checkbox {
+        margin: 5px;
+        padding: 10px;
+    }
+
+    /* Stack quiz action buttons full-width */
+    #feedback .btn,
+    .quiz-container > .text-center > .btn {
+        display: block;
+        width: 100%;
+        margin: 8px 0 0 0 !important;
+    }
+
+    .table {
+        font-size: 0.85rem;
     }
 }
 
-/* Dark mode support with high contrast */
+/* Prevent iOS zoom-on-focus (inputs must be >=16px) */
+@media (max-width: 768px) {
+    input[type="text"], input[type="email"], input[type="password"], select {
+        font-size: 16px;
+    }
+    .answer-input {
+        font-size: 1.5rem; /* keep the big quiz input */
+    }
+}
+
+/* ============ Dark mode ============
+   Two triggers, same styles:
+   1. html[data-theme="dark"]  — user chose dark via the navbar toggle
+   2. system prefers dark AND no explicit choice (html:not([data-theme="light"]))
+   An explicit data-theme="light" always wins over the system preference. */
+
+html[data-theme="dark"] body {
+    background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+}
+html[data-theme="dark"] .quiz-container {
+    background: #2d3748; color: #f7fafc; border: 1px solid #4a5568;
+}
+html[data-theme="dark"] .stats-card {
+    background: #4a5568; color: #f7fafc; border: 1px solid #718096;
+}
+html[data-theme="dark"] .grade-checkbox { border-color: #718096; color: #f7fafc; }
+html[data-theme="dark"] .grade-checkbox:hover { background-color: #4a5568; border-color: #a0aec0; }
+html[data-theme="dark"] .grade-checkbox.selected { background-color: #718096; color: #f7fafc; }
+html[data-theme="dark"] .answer-input { background: #4a5568; color: #f7fafc; border-color: #718096; }
+html[data-theme="dark"] .definition-box { background: #4a5568; color: #f7fafc; border-left-color: #a0aec0; }
+html[data-theme="dark"] .spell-diff { color: #f7fafc; background: #4a5568; }
+html[data-theme="dark"] .quiz-container h1,
+html[data-theme="dark"] .quiz-container h2,
+html[data-theme="dark"] .quiz-container h4,
+html[data-theme="dark"] .quiz-container h5,
+html[data-theme="dark"] .quiz-container .word-display,
+html[data-theme="dark"] .quiz-container p,
+html[data-theme="dark"] .quiz-container label,
+html[data-theme="dark"] .quiz-container li { color: #f7fafc; }
+html[data-theme="dark"] .quiz-container .text-muted,
+html[data-theme="dark"] .quiz-container small { color: #cbd5e0 !important; }
+html[data-theme="dark"] .table { color: #f7fafc; }
+html[data-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > * { color: #f7fafc; background-color: rgba(255,255,255,0.05); }
+html[data-theme="dark"] .table > :not(caption) > * > * { background-color: transparent; color: #f7fafc; }
+html[data-theme="dark"] .card { background: #4a5568; color: #f7fafc; }
+html[data-theme="dark"] .card .card-title { color: #ffb3b8; }
+html[data-theme="dark"] .form-control, html[data-theme="dark"] .form-select {
+    background: #4a5568; color: #f7fafc; border-color: #718096;
+}
+html[data-theme="dark"] .alert-light { background: #4a5568; color: #f7fafc; border-color: #718096; }
+html[data-theme="dark"] .list-group-item { color: #f7fafc; }
+
 @media (prefers-color-scheme: dark) {
-    body {
+    html:not([data-theme="light"]) body {
         background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
     }
-    
-    .quiz-container {
-        background: #2d3748;
-        color: #f7fafc; /* High contrast white text */
-        border: 1px solid #4a5568;
+    html:not([data-theme="light"]) .quiz-container {
+        background: #2d3748; color: #f7fafc; border: 1px solid #4a5568;
     }
-    
-    .stats-card {
-        background: #4a5568;
-        color: #f7fafc; /* High contrast white text */
-        border: 1px solid #718096;
+    html:not([data-theme="light"]) .stats-card {
+        background: #4a5568; color: #f7fafc; border: 1px solid #718096;
     }
-    
-    .grade-checkbox {
-        border-color: #718096;
-        color: #f7fafc;
+    html:not([data-theme="light"]) .grade-checkbox { border-color: #718096; color: #f7fafc; }
+    html:not([data-theme="light"]) .grade-checkbox:hover { background-color: #4a5568; border-color: #a0aec0; }
+    html:not([data-theme="light"]) .grade-checkbox.selected { background-color: #718096; color: #f7fafc; }
+    html:not([data-theme="light"]) .answer-input { background: #4a5568; color: #f7fafc; border-color: #718096; }
+    html:not([data-theme="light"]) .definition-box { background: #4a5568; color: #f7fafc; border-left-color: #a0aec0; }
+    html:not([data-theme="light"]) .spell-diff { color: #f7fafc; background: #4a5568; }
+    html:not([data-theme="light"]) .quiz-container h1,
+    html:not([data-theme="light"]) .quiz-container h2,
+    html:not([data-theme="light"]) .quiz-container h4,
+    html:not([data-theme="light"]) .quiz-container h5,
+    html:not([data-theme="light"]) .quiz-container .word-display,
+    html:not([data-theme="light"]) .quiz-container p,
+    html:not([data-theme="light"]) .quiz-container label,
+    html:not([data-theme="light"]) .quiz-container li { color: #f7fafc; }
+    html:not([data-theme="light"]) .quiz-container .text-muted,
+    html:not([data-theme="light"]) .quiz-container small { color: #cbd5e0 !important; }
+    html:not([data-theme="light"]) .table { color: #f7fafc; }
+    html:not([data-theme="light"]) .table-striped > tbody > tr:nth-of-type(odd) > * { color: #f7fafc; background-color: rgba(255,255,255,0.05); }
+    html:not([data-theme="light"]) .table > :not(caption) > * > * { background-color: transparent; color: #f7fafc; }
+    html:not([data-theme="light"]) .card { background: #4a5568; color: #f7fafc; }
+    html:not([data-theme="light"]) .card .card-title { color: #ffb3b8; }
+    html:not([data-theme="light"]) .form-control, html:not([data-theme="light"]) .form-select {
+        background: #4a5568; color: #f7fafc; border-color: #718096;
     }
-    
-    .grade-checkbox:hover {
-        background-color: #4a5568;
-        border-color: #a0aec0;
-    }
-    
-    .grade-checkbox.selected {
-        background-color: #718096;
-        color: #f7fafc;
-    }
-    
-    .answer-input {
-        background: #4a5568;
-        color: #f7fafc;
-        border-color: #718096;
-    }
-    
-    .definition-box {
-        background: #4a5568;
-        color: #f7fafc;
-        border-left-color: #a0aec0;
-    }
+    html:not([data-theme="light"]) .alert-light { background: #4a5568; color: #f7fafc; border-color: #718096; }
+    html:not([data-theme="light"]) .list-group-item { color: #f7fafc; }
 }

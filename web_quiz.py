@@ -118,6 +118,9 @@ def from_json_filter(s):
 # Database setup
 DATABASE = 'quiz_sessions.db'
 
+# Emails that are always granted admin (seeded at init and on registration)
+ADMIN_EMAILS = {'henrykoren@gmail.com'}
+
 def init_db():
     """Initialize the database"""
     with sqlite3.connect(DATABASE) as conn:
@@ -226,7 +229,51 @@ def init_db():
             )
         ''')
 
+        # Admin columns on users (is_admin, is_active)
+        for col, ddl in [('is_admin', 'ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0'),
+                         ('is_active', 'ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1')]:
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+        # Admin action audit log
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_id INTEGER,
+                admin_email TEXT,
+                action TEXT,
+                target_user_id INTEGER,
+                target_email TEXT,
+                detail TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # Seed designated admin accounts
+        for admin_email in ADMIN_EMAILS:
+            conn.execute('UPDATE users SET is_admin = 1 WHERE email = ?', (admin_email,))
+
         conn.commit()
+
+def log_admin_action(action, target_user_id=None, target_email=None, detail=None):
+    """Record an admin action to the audit log."""
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            conn.execute('''
+                INSERT INTO audit_log (admin_id, admin_email, action, target_user_id, target_email, detail)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (session.get('user_id'), session.get('user_email'), action,
+                  target_user_id, target_email, detail))
+            conn.commit()
+    except Exception as e:
+        print(f"Error writing audit log: {e}")
+
+def count_admins():
+    """Number of active admin accounts (used to prevent removing the last admin)."""
+    with sqlite3.connect(DATABASE) as conn:
+        return conn.execute('SELECT COUNT(*) FROM users WHERE is_admin = 1').fetchone()[0]
 
 def save_user_prefs(user_id, prefs):
     """Remember a user's last quiz setup (grades, word type, count)."""
@@ -432,13 +479,14 @@ def create_user(name, email, password=None, birth_year=None, birth_month=None, g
     try:
         email = normalize_email(email)
         password_hash = hash_password(password) if password else None
+        is_admin = 1 if email in ADMIN_EMAILS else 0
 
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                INSERT INTO users (name, email, password_hash, birth_year, birth_month, google_id, auth_provider)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (name, email, password_hash, birth_year, birth_month, google_id, auth_provider))
+                INSERT INTO users (name, email, password_hash, birth_year, birth_month, google_id, auth_provider, is_admin)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (name, email, password_hash, birth_year, birth_month, google_id, auth_provider, is_admin))
             conn.commit()
             return cursor.lastrowid
     except sqlite3.IntegrityError:
@@ -511,11 +559,11 @@ def authenticate_user(email, password):
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, name, email, password_hash, birth_year, birth_month, auth_provider
+                SELECT id, name, email, password_hash, birth_year, birth_month, auth_provider, is_active
                 FROM users WHERE email = ? AND auth_provider = 'local'
             ''', (email,))
             user = cursor.fetchone()
-            
+
             if user and user[3] and verify_password(password, user[3]):
                 # Transparently upgrade legacy SHA-1 hashes to PBKDF2 on login
                 if ':' not in user[3]:
@@ -528,7 +576,8 @@ def authenticate_user(email, password):
                     'email': user[2],
                     'birth_year': user[4],
                     'birth_month': user[5],
-                    'auth_provider': user[6]
+                    'auth_provider': user[6],
+                    'is_active': user[7] if user[7] is not None else 1
                 }
             return None
     except Exception as e:
@@ -564,13 +613,40 @@ def get_user_by_id(user_id):
 def login_required(f):
     """Decorator to require login for routes"""
     from functools import wraps
-    
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
+
+def is_admin_user(user_id):
+    """True if the given user id is an active admin."""
+    if not user_id:
+        return False
+    with sqlite3.connect(DATABASE) as conn:
+        row = conn.execute('SELECT is_admin, is_active FROM users WHERE id = ?', (user_id,)).fetchone()
+    return bool(row and row[0] and (row[1] if row[1] is not None else 1))
+
+def admin_required(f):
+    """Require an authenticated, active admin (layered on top of login)."""
+    from functools import wraps
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        if not is_admin_user(session['user_id']):
+            flash('You do not have permission to access that page.', 'error')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Expose admin flag to templates (for the navbar link)
+@app.context_processor
+def inject_admin_flag():
+    return {'is_admin': is_admin_user(session.get('user_id')) if 'user_id' in session else False}
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -583,6 +659,9 @@ def login():
         
         if email and password:
             user = authenticate_user(email, password)
+            if user and not user.get('is_active', 1):
+                flash('This account has been deactivated. Contact the site administrator.', 'error')
+                return render_template('login.html')
             if user:
                 session['user_id'] = user['id']
                 session['user_name'] = user['name']
@@ -717,6 +796,11 @@ def google_callback():
                     return redirect(url_for('login'))
         
         if user:
+            with sqlite3.connect(DATABASE) as conn:
+                row = conn.execute('SELECT is_active FROM users WHERE id = ?', (user['id'],)).fetchone()
+            if row and row[0] is not None and not row[0]:
+                flash('This account has been deactivated. Contact the site administrator.', 'error')
+                return redirect(url_for('login'))
             session['user_id'] = user['id']
             session['user_name'] = user['name']
             session['user_email'] = user['email']
@@ -1114,6 +1198,202 @@ def quit_quiz():
     session.pop('quiz_id', None)
     flash('Quiz ended.', 'info')
     return redirect(url_for('setup'))
+
+# ---- Admin / user management ---------------------------------------------------------
+
+@app.route('/admin')
+@admin_required
+def admin():
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    """List, search, and paginate users."""
+    q = (request.args.get('q') or '').strip()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except ValueError:
+        page = 1
+    page_size = 25
+    offset = (page - 1) * page_size
+
+    where, params = '', []
+    if q:
+        where = 'WHERE u.name LIKE ? OR u.email LIKE ?'
+        params = [f'%{q}%', f'%{q}%']
+
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+        total = conn.execute(f'SELECT COUNT(*) AS c FROM users u {where}', params).fetchone()['c']
+        rows = conn.execute(f'''
+            SELECT u.id, u.name, u.email, u.auth_provider, u.is_admin, u.is_active,
+                   u.created_at,
+                   (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id) AS quiz_count,
+                   (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_active
+            FROM users u
+            {where}
+            ORDER BY u.created_at DESC
+            LIMIT ? OFFSET ?
+        ''', params + [page_size, offset]).fetchall()
+
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    return render_template('admin_users.html', users=rows, q=q, page=page,
+                           total_pages=total_pages, total=total)
+
+@app.route('/admin/users/<int:user_id>')
+@admin_required
+def admin_user_detail(user_id):
+    """Detailed view of one user: profile, stats, sessions, misses."""
+    user = get_user_by_id(user_id)
+    if not user:
+        flash('User not found.', 'error')
+        return redirect(url_for('admin_users'))
+
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+        flags = conn.execute('SELECT is_admin, is_active FROM users WHERE id = ?', (user_id,)).fetchone()
+        stats = conn.execute('''
+            SELECT COUNT(*) AS total_quizzes, AVG(percentage) AS avg_score,
+                   SUM(total_words) AS total_words, SUM(correct_count) AS total_correct
+            FROM sessions WHERE user_id = ?
+        ''', (user_id,)).fetchone()
+        recent = conn.execute('''
+            SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 15
+        ''', (user_id,)).fetchall()
+
+    misses = get_user_misses(user_id, limit=10)
+    return render_template('admin_user_detail.html', u=user, flags=flags, stats=stats,
+                           recent=recent, misses=misses)
+
+@app.route('/admin/users/<int:user_id>/toggle_active', methods=['POST'])
+@admin_required
+def admin_toggle_active(user_id):
+    """Deactivate or reactivate an account."""
+    if user_id == session['user_id']:
+        flash("You can't deactivate your own account.", 'error')
+        return redirect(url_for('admin_user_detail', user_id=user_id))
+    with sqlite3.connect(DATABASE) as conn:
+        row = conn.execute('SELECT email, is_active FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not row:
+            flash('User not found.', 'error')
+            return redirect(url_for('admin_users'))
+        new_state = 0 if (row[1] if row[1] is not None else 1) else 1
+        conn.execute('UPDATE users SET is_active = ? WHERE id = ?', (new_state, user_id))
+        conn.commit()
+    log_admin_action('activate' if new_state else 'deactivate', user_id, row[0])
+    flash(f"Account {'reactivated' if new_state else 'deactivated'}.", 'success')
+    return redirect(url_for('admin_user_detail', user_id=user_id))
+
+@app.route('/admin/users/<int:user_id>/toggle_admin', methods=['POST'])
+@admin_required
+def admin_toggle_admin(user_id):
+    """Promote or demote admin, guarding against removing the last admin."""
+    with sqlite3.connect(DATABASE) as conn:
+        row = conn.execute('SELECT email, is_admin FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not row:
+            flash('User not found.', 'error')
+            return redirect(url_for('admin_users'))
+        currently_admin = bool(row[1])
+        if currently_admin and count_admins() <= 1:
+            flash('Cannot remove the last remaining admin.', 'error')
+            return redirect(url_for('admin_user_detail', user_id=user_id))
+        new_state = 0 if currently_admin else 1
+        conn.execute('UPDATE users SET is_admin = ? WHERE id = ?', (new_state, user_id))
+        conn.commit()
+    log_admin_action('grant_admin' if new_state else 'revoke_admin', user_id, row[0])
+    flash(f"Admin {'granted' if new_state else 'revoked'}.", 'success')
+    return redirect(url_for('admin_user_detail', user_id=user_id))
+
+@app.route('/admin/users/<int:user_id>/reset_password', methods=['POST'])
+@admin_required
+def admin_reset_password(user_id):
+    """Set a temporary password for a local account and show it once."""
+    with sqlite3.connect(DATABASE) as conn:
+        row = conn.execute('SELECT email, auth_provider FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not row:
+            flash('User not found.', 'error')
+            return redirect(url_for('admin_users'))
+        if row[1] != 'local':
+            flash('Password reset applies only to local (email/password) accounts.', 'error')
+            return redirect(url_for('admin_user_detail', user_id=user_id))
+        temp = secrets.token_urlsafe(9)
+        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (hash_password(temp), user_id))
+        conn.commit()
+    log_admin_action('reset_password', user_id, row[0])
+    flash(f'Temporary password for {row[0]}: {temp} — share it securely; the user should change it.', 'success')
+    return redirect(url_for('admin_user_detail', user_id=user_id))
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def admin_delete_user(user_id):
+    """Hard-delete a user and cascade their data."""
+    if user_id == session['user_id']:
+        flash("You can't delete your own account.", 'error')
+        return redirect(url_for('admin_user_detail', user_id=user_id))
+    with sqlite3.connect(DATABASE) as conn:
+        row = conn.execute('SELECT email, is_admin FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not row:
+            flash('User not found.', 'error')
+            return redirect(url_for('admin_users'))
+        if row[1] and count_admins() <= 1:
+            flash('Cannot delete the last remaining admin.', 'error')
+            return redirect(url_for('admin_user_detail', user_id=user_id))
+        for tbl in ('sessions', 'quiz_state', 'user_prefs'):
+            conn.execute(f'DELETE FROM {tbl} WHERE user_id = ?', (user_id,))
+        conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        conn.commit()
+    log_admin_action('delete_user', user_id, row[0])
+    flash(f'Deleted {row[0]} and all associated data.', 'success')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/users/<int:user_id>/export')
+@admin_required
+def admin_export_user(user_id):
+    """Export a user's stored data as JSON (data-access request)."""
+    user = get_user_by_id(user_id)
+    if not user:
+        flash('User not found.', 'error')
+        return redirect(url_for('admin_users'))
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+        sessions_rows = [dict(r) for r in conn.execute(
+            'SELECT * FROM sessions WHERE user_id = ? ORDER BY created_at', (user_id,)).fetchall()]
+        prefs = conn.execute('SELECT prefs FROM user_prefs WHERE user_id = ?', (user_id,)).fetchone()
+    export = {'user': user, 'preferences': json.loads(prefs[0]) if prefs and prefs[0] else None,
+              'quiz_sessions': sessions_rows}
+    resp = jsonify(export)
+    resp.headers['Content-Disposition'] = f'attachment; filename=spellaroo_user_{user_id}.json'
+    log_admin_action('export_user', user_id, user['email'])
+    return resp
+
+@app.route('/admin/users/bulk', methods=['POST'])
+@admin_required
+def admin_bulk():
+    """Bulk deactivate/reactivate selected users."""
+    action = request.form.get('bulk_action')
+    ids = [int(x) for x in request.form.getlist('user_ids') if x.isdigit()]
+    ids = [i for i in ids if i != session['user_id']]  # never touch self
+    if action in ('deactivate', 'reactivate') and ids:
+        new_state = 1 if action == 'reactivate' else 0
+        with sqlite3.connect(DATABASE) as conn:
+            conn.executemany('UPDATE users SET is_active = ? WHERE id = ?',
+                             [(new_state, i) for i in ids])
+            conn.commit()
+        log_admin_action(f'bulk_{action}', detail=f'{len(ids)} users: {ids}')
+        flash(f'{action.title()}d {len(ids)} user(s).', 'success')
+    else:
+        flash('No valid users selected.', 'error')
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/audit')
+@admin_required
+def admin_audit():
+    """Recent admin actions."""
+    with sqlite3.connect(DATABASE) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 100').fetchall()
+    return render_template('admin_audit.html', rows=rows)
 
 @app.route('/api/word_data/<word>')
 def get_word_data(word):

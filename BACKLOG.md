@@ -5,10 +5,16 @@ category and priority. Mirrored into the Todoist "Spellaroo" project (the source
 of truth). P1 = do first, P2 = soon, P3 = nice-to-have.
 
 **Status:** The entire original backlog (all Security, Cosmetic, Usability, and
-Functionality items below) was completed and deployed on 2026-07-19 and the
-corresponding Todoist tasks closed. The only open work is the **Admin / User
-Management** plan (tracked in Todoist; admin account = henrykoren@gmail.com),
-which is not yet implemented.
+Functionality items below) was completed and deployed on 2026-07-19, as was the
+**Admin / User Management** plan (admin = henrykoren@gmail.com; /admin dashboard
+with search/pagination, user detail, deactivate/reactivate, delete+cascade,
+temp-password reset, promote/demote with last-admin guard, audit log, JSON
+export, bulk actions). Also shipped same day: dark-mode toggle (persisted,
+system-preference aware), mobile responsiveness pass (hamburger nav, tap
+targets, iOS zoom fix), and a word-database audit (30 grade-level corrections,
+57 new kindergarten words — K set now 73, total 1,930).
+
+The only open work is the **Monetization** plan (17 tasks in Todoist).
 
 Highlights shipped: SHA-1→PBKDF2 (rehash-on-login), CSRF, server-side quiz
 state (answers off the cookie), SECRET_KEY hard-fail, rate limiting, email

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Admin · Users - Spellaroo{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <h2 class="mb-0"><i class="fas fa-users-cog me-2"></i>User Management</h2>
+        <a href="{{ url_for('admin_audit') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-clipboard-list me-1"></i>Audit Log
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endwith %}
+
+    <!-- Search -->
+    <form method="GET" class="row g-2 mb-3">
+        <div class="col-sm-8 col-md-6">
+            <input type="search" class="form-control" name="q" value="{{ q }}" placeholder="Search name or email...">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Search</button>
+            {% if q %}<a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">Clear</a>{% endif %}
+        </div>
+    </form>
+
+    <p class="text-muted">{{ total }} user{{ 's' if total != 1 }}{% if q %} matching "{{ q }}"{% endif %}</p>
+
+    <!-- Bulk form wraps the table -->
+    <form method="POST" action="{{ url_for('admin_bulk') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" id="selectAll" aria-label="Select all"></th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Provider</th>
+                        <th>Quizzes</th>
+                        <th>Last Active</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td><input type="checkbox" name="user_ids" value="{{ u.id }}" aria-label="Select {{ u.email }}"></td>
+                        <td>
+                            {{ u.name }}
+                            {% if u.is_admin %}<span class="badge bg-primary ms-1">admin</span>{% endif %}
+                        </td>
+                        <td>{{ u.email }}</td>
+                        <td>
+                            {% if u.auth_provider == 'google' %}
+                                <i class="fab fa-google text-danger"></i> Google
+                            {% else %}
+                                <i class="fas fa-envelope text-primary"></i> Local
+                            {% endif %}
+                        </td>
+                        <td>{{ u.quiz_count }}</td>
+                        <td><small>{{ (u.last_active or '')[:10] or '—' }}</small></td>
+                        <td>
+                            {% if u.is_active is none or u.is_active %}
+                                <span class="badge bg-success">active</span>
+                            {% else %}
+                                <span class="badge bg-secondary">deactivated</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('admin_user_detail', user_id=u.id) }}" class="btn btn-sm btn-outline-primary">
+                                Manage
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted py-4">No users found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Bulk actions -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <select class="form-select w-auto" name="bulk_action" aria-label="Bulk action">
+                <option value="deactivate">Deactivate selected</option>
+                <option value="reactivate">Reactivate selected</option>
+            </select>
+            <button type="submit" class="btn btn-outline-danger"
+                    onclick="return confirm('Apply this action to all selected users?');">
+                Apply to Selected
+            </button>
+        </div>
+    </form>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <nav aria-label="User pages">
+        <ul class="pagination justify-content-center">
+            {% for p in range(1, total_pages + 1) %}
+            <li class="page-item {{ 'active' if p == page }}">
+                <a class="page-link" href="{{ url_for('admin_users', page=p, q=q) }}">{{ p }}</a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$('#selectAll').on('change', function () {
+    $('input[name="user_ids"]').prop('checked', this.checked);
+});
+</script>
+{% endblock %}

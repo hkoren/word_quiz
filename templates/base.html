@@ -9,6 +9,14 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
     <meta name="theme-color" content="#764ba2">
+    <script>
+        // Apply saved theme before first paint to avoid a flash.
+        // Values: 'dark' | 'light' | unset (follow system preference).
+        (function () {
+            var t = localStorage.getItem('spellaroo_theme');
+            if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
@@ -128,17 +136,30 @@
             <a class="navbar-brand" href="{{ url_for('index') }}">
                 <span class="brand-roo" aria-hidden="true">🦘</span> Spellaroo
             </a>
-            <div class="navbar-nav ms-auto">
-                {% if logged_in %}
-                <a class="nav-link" href="{{ url_for('index') }}">Home</a>
-                <a class="nav-link" href="{{ url_for('setup') }}">New Quiz</a>
-                <a class="nav-link" href="{{ url_for('statistics') }}">Statistics</a>
-                <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
-                <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                {% else %}
-                <a class="nav-link" href="{{ url_for('login') }}">Login</a>
-                <a class="nav-link" href="{{ url_for('register') }}">Register</a>
-                {% endif %}
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                    aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="mainNav">
+                <div class="navbar-nav ms-auto align-items-lg-center">
+                    {% if logged_in %}
+                    <a class="nav-link" href="{{ url_for('index') }}">Home</a>
+                    <a class="nav-link" href="{{ url_for('setup') }}">New Quiz</a>
+                    <a class="nav-link" href="{{ url_for('statistics') }}">Statistics</a>
+                    <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
+                    {% if is_admin %}
+                    <a class="nav-link" href="{{ url_for('admin_users') }}"><i class="fas fa-users-cog"></i> Admin</a>
+                    {% endif %}
+                    <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                    {% else %}
+                    <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                    <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+                    {% endif %}
+                    <button class="btn btn-sm btn-outline-light ms-lg-2 mt-2 mt-lg-0" id="themeToggle"
+                            type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+                        <i class="fas fa-moon" id="themeIcon"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
@@ -168,6 +189,28 @@
                     }
                 }
             });
+        })();
+
+        // Dark mode toggle: cycles explicit dark/light, persisted in localStorage.
+        (function () {
+            var root = document.documentElement;
+            function isDark() {
+                var t = root.getAttribute('data-theme');
+                if (t) return t === 'dark';
+                return window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            function refreshIcon() {
+                var i = document.getElementById('themeIcon');
+                if (i) i.className = isDark() ? 'fas fa-sun' : 'fas fa-moon';
+            }
+            var btn = document.getElementById('themeToggle');
+            if (btn) btn.addEventListener('click', function () {
+                var next = isDark() ? 'light' : 'dark';
+                root.setAttribute('data-theme', next);
+                localStorage.setItem('spellaroo_theme', next);
+                refreshIcon();
+            });
+            refreshIcon();
         })();
     </script>
     {% block scripts %}{% endblock %}
