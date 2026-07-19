@@ -86,7 +86,13 @@ def create_google_oauth_flow():
                 "redirect_uris": [url_for('google_callback', _external=True)]
             }
         },
-        scopes=['openid', 'email', 'profile']
+        # Use the canonical scope URIs: Google's token response returns these,
+        # and oauthlib raises "Scope has changed" if they don't match the request.
+        scopes=[
+            'openid',
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
+        ]
     )
     flow.redirect_uri = url_for('google_callback', _external=True)
     return flow
