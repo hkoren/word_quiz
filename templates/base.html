@@ -9,6 +9,16 @@
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
     <meta name="theme-color" content="#764ba2">
+    {% if ga_measurement_id %}
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_measurement_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ ga_measurement_id }}');
+    </script>
+    {% endif %}
     <script>
         // Apply saved theme before first paint to avoid a flash.
         // Values: 'dark' | 'light' | unset (follow system preference).

@@ -104,6 +104,8 @@ def inject_globals():
         'current_year': datetime.now().year,
         'logged_in': 'user_id' in session,
         'nav_user_name': session.get('user_name'),
+        # Google Analytics 4 measurement id (set GA_MEASUREMENT_ID='' to disable)
+        'ga_measurement_id': os.environ.get('GA_MEASUREMENT_ID', 'G-C6BBC2T3EM'),
     }
 
 # Add custom template filters
