@@ -4,10 +4,19 @@ Inventory of enhancements for the Spellaroo web app (spellaroo.com), grouped by
 category and priority. Mirrored into the Todoist "Spellaroo" project (the source
 of truth). P1 = do first, P2 = soon, P3 = nice-to-have.
 
-**Completed 2026-07-19:** SHA-1 → PBKDF2 (with transparent rehash-on-login),
-session cookie flags (Secure/HttpOnly/SameSite), removed prod
-`OAUTHLIB_INSECURE_TRANSPORT`, per-user `/statistics` filter, and Google OAuth
-enabled (ProxyFix for https redirect_uri + PKCE code_verifier fix).
+**Status:** The entire original backlog (all Security, Cosmetic, Usability, and
+Functionality items below) was completed and deployed on 2026-07-19 and the
+corresponding Todoist tasks closed. The only open work is the **Admin / User
+Management** plan (tracked in Todoist; admin account = henrykoren@gmail.com),
+which is not yet implemented.
+
+Highlights shipped: SHA-1→PBKDF2 (rehash-on-login), CSRF, server-side quiz
+state (answers off the cookie), SECRET_KEY hard-fail, rate limiting, email
+normalization, HSTS, privacy page, Google OAuth (ProxyFix + PKCE fix),
+character-diff feedback, spell-it-out, voice/speed controls, autoplay handling,
+remembered settings, practice-missed mode, top-missed insights, profile
+editing, streaks/badges, PWA manifest, kangaroo branding, and assorted bug
+fixes (blank results definitions, dead date, stale word count, debug output).
 
 ## Security
 
