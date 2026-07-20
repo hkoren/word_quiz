@@ -239,6 +239,9 @@ a.otc-tag:focus-visible {
     #ro;
     #onResize;
     #destroyed = false;
+    // suppress the FLIP for packs that belong to initial rendering (the
+    // fonts.ready re-measure) — animating font-metric corrections reads as jank
+    #skipFlip = false;
     constructor(root, options = {}) {
       this.#root = root;
       this.#fill = options.fill;
@@ -272,7 +275,13 @@ a.otc-tag:focus-visible {
       this.#ro.observe(this.#root);
       window.addEventListener("resize", onResize);
       document.fonts?.ready?.then(() => {
-        if (!this.#destroyed) this.pack();
+        if (this.#destroyed) return;
+        this.#skipFlip = true;
+        try {
+          this.pack();
+        } finally {
+          this.#skipFlip = false;
+        }
       });
     }
     /** Re-pack after the tag elements changed (items added/removed/re-weighted). */
@@ -368,7 +377,7 @@ a.otc-tag:focus-visible {
       const W = root.clientWidth;
       if (W < 2) return;
       this.#lastW = W;
-      const flipFrom = root.classList.contains("otc-packed") && this.#moveEnabled() ? this.#snapshot(tags) : null;
+      const flipFrom = root.classList.contains("otc-packed") && !this.#skipFlip && this.#moveEnabled() ? this.#snapshot(tags) : null;
       const weights = tags.map((el) => {
         const w = parseFloat(el.dataset.weight ?? "");
         return Number.isFinite(w) ? w : 1;
@@ -394,7 +403,7 @@ a.otc-tag:focus-visible {
       const setBase = (scale2) => {
         for (const el of tags) {
           el.style.whiteSpace = wide ? "nowrap" : "normal";
-          el.style.maxWidth = wide ? `${Math.round(W * 0.6)}px` : "min(6.5em, 100%)";
+          el.style.maxWidth = wide ? "none" : "min(6.5em, 100%)";
           el.style.fontSize = `${Math.max(8, parseFloat(el.dataset.fs || "12") * widthFactor(W) * scale2).toFixed(1)}px`;
         }
       };
@@ -406,7 +415,7 @@ a.otc-tag:focus-visible {
       if (fit && baseArea > 0) {
         scale = Math.min(
           2.5,
-          Math.max(0.6, Math.sqrt(W * externalH / (baseArea * LOOSEN)))
+          Math.max(1, Math.sqrt(W * externalH / (baseArea * LOOSEN)))
         );
       }
       const n = dims.length;
@@ -419,10 +428,11 @@ a.otc-tag:focus-visible {
           setBase(scale);
           dims = measure();
         }
+        const maxTagW = wide ? W * 0.85 : W;
         for (const d of dims) {
-          if (d.w > W) {
+          if (d.w > maxTagW) {
             const cur = parseFloat(d.el.style.fontSize) || 12;
-            d.el.style.fontSize = `${Math.max(9, cur * (W / d.w)).toFixed(1)}px`;
+            d.el.style.fontSize = `${Math.max(9, cur * (maxTagW / d.w)).toFixed(1)}px`;
             d.w = d.el.offsetWidth;
             d.h = d.el.offsetHeight;
           }
@@ -495,8 +505,9 @@ a.otc-tag:focus-visible {
           pos[idx] = { x, y };
           maxY = Math.max(maxY, y + h);
         });
-        if (!fit || attempt === ATTEMPTS - 1 || maxY <= externalH * 1.08) break;
-        scale = Math.max(0.5, scale * (externalH / maxY) * 0.95);
+        if (!fit || attempt === ATTEMPTS - 1 || maxY <= externalH * 1.08 || scale <= 1)
+          break;
+        scale = Math.max(1, scale * (externalH / maxY) * 0.95);
       }
       for (const el of tags) el.style.position = "absolute";
       this.#base = dims.map((d, i) => ({ x: pos[i].x, y: pos[i].y, h: d.h }));
@@ -533,7 +544,7 @@ a.otc-tag:focus-visible {
       const wide = W >= 380;
       for (const el of tags) {
         el.style.whiteSpace = wide ? "nowrap" : "normal";
-        el.style.maxWidth = wide ? `${Math.round(W * 0.6)}px` : "min(6.5em, 100%)";
+        el.style.maxWidth = wide ? "none" : "min(6.5em, 100%)";
         el.style.fontSize = `${Math.max(8, parseFloat(el.dataset.fs || "12") * widthFactor(W) * this.#packScale).toFixed(1)}px`;
         el.style.transform = "";
       }
@@ -542,10 +553,11 @@ a.otc-tag:focus-visible {
         w: el.offsetWidth,
         h: el.offsetHeight
       }));
+      const maxTagW = wide ? W * 0.85 : W;
       for (const d of dims) {
-        if (d.w > W) {
+        if (d.w > maxTagW) {
           const cur = parseFloat(d.el.style.fontSize) || 12;
-          d.el.style.fontSize = `${Math.max(9, cur * (W / d.w)).toFixed(1)}px`;
+          d.el.style.fontSize = `${Math.max(9, cur * (maxTagW / d.w)).toFixed(1)}px`;
           d.w = d.el.offsetWidth;
           d.h = d.el.offsetHeight;
         }
