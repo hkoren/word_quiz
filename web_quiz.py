@@ -345,24 +345,23 @@ def record_word_attempt(user_id, word, is_correct):
         ''', (user_id, word))
         conn.commit()
 
-def build_word_cloud(user_id, n=100):
-    """Pick n random words and attach the user's accuracy + a green→red color.
+def build_word_cloud(n=100):
+    """Pick n random words and attach site-wide accuracy + a green→red color.
 
-    Returns a list of dicts: {word, correct, incorrect, attempts, ratio, color, size}.
-    Words never attempted get a neutral color; the rest blend from red (always
-    wrong) through amber to green (always right) by accuracy ratio.
+    Aggregates word_stats across ALL users. Words never attempted get a neutral
+    color; the rest blend from red (everyone gets it wrong) through amber to
+    green (everyone gets it right) by accuracy ratio.
     """
     keys = list(word_dictionary.keys())
     sample = random.sample(keys, min(n, len(keys)))
 
-    stats = {}
-    if user_id:
-        with sqlite3.connect(DATABASE) as conn:
-            qmarks = ','.join('?' * len(sample))
-            rows = conn.execute(
-                f'SELECT word, correct, incorrect FROM word_stats WHERE user_id = ? AND word IN ({qmarks})',
-                [user_id] + sample).fetchall()
-        stats = {w: (c, i) for w, c, i in rows}
+    with sqlite3.connect(DATABASE) as conn:
+        qmarks = ','.join('?' * len(sample))
+        rows = conn.execute(
+            f'''SELECT word, SUM(correct), SUM(incorrect) FROM word_stats
+                WHERE word IN ({qmarks}) GROUP BY word''',
+            sample).fetchall()
+    stats = {w: (c or 0, i or 0) for w, c, i in rows}
 
     cloud = []
     for w in sample:
@@ -1039,7 +1038,7 @@ def index():
     return render_template('index.html',
                            user_name=session.get('user_name'),
                            word_count=len(word_dictionary),
-                           word_cloud=build_word_cloud(session['user_id'], 100))
+                           word_cloud=build_word_cloud(100))
 
 @app.route('/privacy')
 def privacy():
