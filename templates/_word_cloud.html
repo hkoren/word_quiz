@@ -1,0 +1,53 @@
+{# Community word cloud card — shared by the landing page (logged out) and the
+   home dashboard (logged in). Expects `word_cloud` from build_word_cloud().
+   Self-contained: loads openTagCloud and mounts itself without jQuery. #}
+{% if word_cloud %}
+<div class="stats-card mt-5">
+    <h5 class="mb-2"><i class="fas fa-cloud me-2"></i>Community Word Cloud</h5>
+    <p class="mb-3">
+        <small class="text-muted">
+            100 random words, colored by how all Spellaroo players spell them &middot;
+            <span style="color:hsl(120,68%,42%);font-weight:bold;">green</span> = always right,
+            <span style="color:hsl(0,68%,42%);font-weight:bold;">red</span> = always wrong,
+            <span style="color:#8a94a6;font-weight:bold;">gray</span> = not tried yet.
+            Hover a word for details.
+        </small>
+    </p>
+    <!-- openTagCloud renders here; the spans below are a no-JS fallback it replaces -->
+    <div id="wordCloud" class="word-cloud-host">
+        <div class="word-cloud">
+            {% for t in word_cloud %}
+            <span class="cloud-word"
+                  style="font-size: {{ t.size }}rem; color: {{ t.color }};"
+                  title="{{ t.title }}">{{ t.word }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    <script id="wordCloudData" type="application/json">{{ word_cloud | tojson }}</script>
+    <script src="{{ url_for('static', filename='opentagcloud.vanilla.js') }}"></script>
+    <script>
+    (function () {
+        function mountCloud() {
+            try {
+                var host = document.getElementById('wordCloud');
+                var items = JSON.parse(document.getElementById('wordCloudData').textContent);
+                if (host && window.openTagCloud && items && items.length) {
+                    host.innerHTML = '';                    // drop the no-JS fallback
+                    openTagCloud.mount(host, items, { minPx: 12, maxPx: 42 });
+                }
+            } catch (e) { /* keep the server-rendered fallback on any error */ }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', mountCloud);
+        } else {
+            mountCloud();
+        }
+    })();
+    </script>
+    <div class="text-center mt-3">
+        <a href="{{ request.path }}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-shuffle me-1"></i>Shuffle words
+        </a>
+    </div>
+</div>
+{% endif %}

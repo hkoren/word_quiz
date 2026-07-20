@@ -1034,7 +1034,8 @@ def practice_missed():
 def index():
     """Main page: public landing for visitors, dashboard for logged-in users."""
     if 'user_id' not in session:
-        return render_template('landing.html', word_count=len(word_dictionary))
+        return render_template('landing.html', word_count=len(word_dictionary),
+                               word_cloud=build_word_cloud(100))
     return render_template('index.html',
                            user_name=session.get('user_name'),
                            word_count=len(word_dictionary),
