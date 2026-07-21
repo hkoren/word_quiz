@@ -1046,6 +1046,68 @@ def privacy():
     """Privacy policy (COPPA-conscious: explains what kids' data is stored)."""
     return render_template('privacy.html')
 
+# ---- Public SEO pages: grade-level spelling word lists --------------------------------
+
+# Ordered grades with their URL slugs and display names.
+SEO_GRADES = [('k', 'kindergarten-spelling-words', 'Kindergarten')] + [
+    (g, f'grade-{g}-spelling-words', f'Grade {g}') for g in range(1, 13)
+]
+_SEO_BY_SLUG = {slug: (grade, name) for grade, slug, name in SEO_GRADES}
+
+def words_for_grade(grade):
+    """All words for a grade, split into (sight_words, regular_words), sorted."""
+    sight, regular = [], []
+    for w, d in word_dictionary.items():
+        if grade in d['grade_levels']:
+            (sight if d['sight_word'] else regular).append((w, d['definition']))
+    return sorted(sight), sorted(regular)
+
+@app.route('/words')
+def words_index():
+    """Index of all grade-level word lists (public, SEO)."""
+    grades = []
+    for grade, slug, name in SEO_GRADES:
+        sight, regular = words_for_grade(grade)
+        grades.append({'slug': slug, 'name': name,
+                       'count': len(sight) + len(regular),
+                       'sample': [w for w, _ in (sight + regular)[:6]]})
+    return render_template('words_index.html', grades=grades,
+                           total=len(word_dictionary))
+
+@app.route('/words/<slug>')
+def words_grade(slug):
+    """One grade's spelling word list with definitions (public, SEO)."""
+    if slug not in _SEO_BY_SLUG:
+        return redirect(url_for('words_index'))
+    grade, name = _SEO_BY_SLUG[slug]
+    sight, regular = words_for_grade(grade)
+    idx = next(i for i, (g, s, n) in enumerate(SEO_GRADES) if s == slug)
+    prev_g = SEO_GRADES[idx - 1] if idx > 0 else None
+    next_g = SEO_GRADES[idx + 1] if idx < len(SEO_GRADES) - 1 else None
+    return render_template('words_grade.html', slug=slug, grade_name=name,
+                           sight_words=sight, regular_words=regular,
+                           count=len(sight) + len(regular),
+                           prev_g=prev_g, next_g=next_g)
+
+@app.route('/sitemap.xml')
+def sitemap():
+    """XML sitemap for search engines."""
+    base = 'https://spellaroo.com'
+    urls = [f'{base}/', f'{base}/words', f'{base}/privacy'] + \
+           [f'{base}/words/{slug}' for _, slug, _ in SEO_GRADES]
+    xml = ['<?xml version="1.0" encoding="UTF-8"?>',
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for u in urls:
+        xml.append(f'  <url><loc>{u}</loc></url>')
+    xml.append('</urlset>')
+    return app.response_class('\n'.join(xml), mimetype='application/xml')
+
+@app.route('/robots.txt')
+def robots():
+    return app.response_class(
+        'User-agent: *\nAllow: /\nSitemap: https://spellaroo.com/sitemap.xml\n',
+        mimetype='text/plain')
+
 @app.route('/setup', methods=['GET', 'POST'])
 @login_required
 def setup():

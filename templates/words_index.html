@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Spelling Word Lists by Grade (K–12) - Spellaroo{% endblock %}
+
+{% block meta %}
+<meta name="description" content="Free printable-friendly spelling word lists for every grade — kindergarten through grade 12. {{ total }} words with kid-friendly definitions, plus a free practice quiz.">
+<link rel="canonical" href="https://spellaroo.com/words">
+{% endblock %}
+
+{% block content %}
+<div class="quiz-container">
+    <h1 class="h2 mb-2"><i class="fas fa-list me-2"></i>Spelling Word Lists by Grade</h1>
+    <p class="text-muted mb-4">
+        {{ total }} words with kid-friendly definitions, organized by grade level —
+        the same lists used in the free <a href="{{ url_for('index') }}">Spellaroo spelling quiz</a>.
+    </p>
+
+    <div class="row g-3">
+        {% for g in grades %}
+        <div class="col-md-6 col-lg-4">
+            <a href="{{ url_for('words_grade', slug=g.slug) }}" class="text-decoration-none">
+                <div class="stats-card h-100">
+                    <h5 class="mb-1">{{ g.name }} Spelling Words</h5>
+                    <p class="text-muted mb-2">{{ g.count }} words</p>
+                    <small class="text-muted">{{ g.sample | join(', ') }}&hellip;</small>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="text-center mt-4">
+        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">
+            <i class="fas fa-play me-2"></i>Practice These Words Free
+        </a>
+    </div>
+</div>
+{% endblock %}
